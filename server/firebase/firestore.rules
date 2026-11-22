@@ -1,0 +1,51 @@
+rules_version = '2';
+
+// 3D PARTY WORLD — Firestore 보안 규칙
+// 원칙
+//  - 클라이언트는 자기 프로필(닉네임·외형)만 형식 검증을 통과할 때 쓸 수 있다.
+//  - 플레이 기록/경험치/재화/매치 결과는 게임 서버(서비스 계정, 규칙 우회)만 쓴다 → 클라이언트 쓰기 전면 금지.
+//  - 명시하지 않은 경로는 모두 거부.
+// 값 범위는 scripts/systems/appearance.gd, validation.gd 와 반드시 일치시킬 것.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function validProfile(d) {
+      return d.keys().hasOnly(['nickname', 'appearance'])
+        && d.keys().hasAll(['nickname', 'appearance'])
+        && d.nickname is string
+        && d.nickname.matches('^[0-9A-Za-z_가-힣]{2,16}$')
+        && d.appearance is map
+        && d.appearance.keys().hasOnly(['color', 'hat'])
+        && d.appearance.keys().hasAll(['color', 'hat'])
+        && d.appearance.color is int && d.appearance.color >= 0 && d.appearance.color < 8
+        && d.appearance.hat is int && d.appearance.hat >= 0 && d.appearance.hat < 5;
+    }
+
+    // 공개 프로필: 로그인한 누구나 읽기(친구 목록·대기실 표시), 본인만 쓰기
+    match /profiles/{uid} {
+      allow read: if signedIn();
+      allow create, update: if isOwner(uid) && validProfile(request.resource.data);
+      allow delete: if false;
+    }
+
+    // 플레이 기록: 본인만 읽기, 쓰기는 게임 서버 전용
+    match /stats/{uid} {
+      allow read: if isOwner(uid);
+      allow write: if false;
+    }
+
+    // 그 외 전부 거부 (matches, inventory, wallets 등은 서버 전용으로 추가 예정)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

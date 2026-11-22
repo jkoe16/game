@@ -1,0 +1,22 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+
+# Node
+node_modules/
+# Local env / secrets
+.env
+*.env.local
+# Test output
+tests/integration/out/
+
+# Firebase 설정 (프로젝트별 값)
+config/firebase.cfg
+
+# Google 서비스 계정 키 (서버 비밀키) — 절대 커밋 금지
+*service-account*.json
+*serviceAccount*.json
+*-firebase-adminsdk-*.json
+
+# 빌드 결과물 (웹 내보내기 등)
+/build/

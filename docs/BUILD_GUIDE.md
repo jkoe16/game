@@ -22,7 +22,8 @@ cd /c/Users/User/Documents/gloveer
 |---|---|
 | 에디터 열기 | `"$GODOT" --path . -e` |
 | 메뉴로 시작 | `"$GODOT" --path .` |
-| 혼자 연습 | `"$GODOT" --path . -- --offline` |
+| 혼자 연습 (광장부터) | `"$GODOT" --path . -- --offline` |
+| 미니게임 바로 연습 | `"$GODOT" --path . -- --offline=obstacle_race` (survival / racing / coop / party) |
 | 전용 서버 | `"$GODOT" --headless --path . -- --server --port=7777 --max-players=8` |
 | 서버에 접속 | `"$GODOT" --path . -- --connect=127.0.0.1:7777 --nickname=나` |
 
@@ -41,8 +42,19 @@ bash tests/integration/net_test.sh capacity
 ```
 `tests/integration/net_test.sh [scenario] [로그폴더]` — 로그 폴더를 생략하면 임시 폴더 사용.
 
-## 4. 내보내기 (Phase 9에서 구성 예정)
-- Windows/Linux 전용 서버: 내보내기 프리셋 "Dedicated Server" (리소스 → 서버용 비시각 리소스 제거) — 미구성
+## 4. 내보내기
+### 웹 (GitHub Pages) — 구성 완료
+- 프리셋: `export_presets.cfg` → "Web" (스레드 끔 = GitHub Pages처럼 COOP/COEP 헤더 없는 호스팅에서 동작)
+- 내보내기 템플릿 4.7.2 필요: `%APPDATA%\Godot\export_templates\4.7.2.stable\web_*.zip`
+- 빌드: `"$GODOT" --headless --path . --export-release "Web" build/web/index.html`
+- 배포: `build/web` 내용을 `gh-pages` 브랜치 루트에 올림 (+ `.nojekyll`) → https://jkoe16.github.io/game/
+- 웹 제약
+  - 렌더러는 Compatibility(WebGL2) 고정. 이 렌더러에서는 그림자 켠 방향광이 과노출되어 **해 그림자를 끔** (`GameMap.setup_environment`)
+  - 브라우저는 ENet(UDP) 불가 → 메뉴에 온라인 버튼 숨김, 오프라인 연습만. 온라인 웹 지원은 WebSocket/WebRTC 서버 필요 (미구현)
+  - 브라우저는 OS 폰트 폴백이 없음 → 한글 폰트 `assets/ui/fonts/NanumGothic-Regular.ttf` (OFL) 를 프로젝트 기본 폰트로 지정
+  - `config/firebase.cfg`는 웹 빌드에 포함하지 않음 → 웹은 로그인 없는 개발 모드
+
+### 그 밖의 플랫폼 (Phase 9에서 구성 예정)- Windows/Linux 전용 서버: 내보내기 프리셋 "Dedicated Server" (리소스 → 서버용 비시각 리소스 제거) — 미구성
 - Windows/macOS 클라이언트, Android(APK/AAB), iOS(Xcode 프로젝트) — 미구성
 - Android 키스토어, iOS 서명 인증서, 스토어 계정은 **사용자 승인/소유 필요**하므로 임의로 만들지 않음.
 

@@ -28,6 +28,8 @@ var tick_offset := 0
 var _offset_valid := false
 ## 봇 목표 지점 제공 (objective 봇): func(pos) -> Vector3 (INF면 배회)
 var bot_target_fn: Callable
+## 오프라인 낙하 시 리스폰 위치 제공: func() -> Vector3
+var fell_handler: Callable
 var _stuck_ticks := 0
 var _pending_snapshot := {}
 
@@ -67,7 +69,8 @@ func _physics_process(delta: float) -> void:
 			history.pop_front()
 		_send_inputs()
 	elif map and body.global_position.y < map.kill_height:
-		body.teleport(map.get_spawn_point(0))
+		# 오프라인: 게임 모드 규칙으로 리스폰 위치 결정 (체크포인트 등), 없으면 스폰 지점
+		body.teleport(fell_handler.call() if fell_handler.is_valid() else map.get_spawn_point(0))
 
 
 func _gather_input(delta: float) -> PlayerInput:

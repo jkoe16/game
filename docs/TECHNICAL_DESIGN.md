@@ -17,7 +17,7 @@
 |---|---|
 | 전용 서버 | `godot --headless --path . -- --server [--port=7777] [--max-players=8] [--map=lobby_plaza]` |
 | 클라이언트 | `godot --path . -- --connect=IP:PORT [--nickname=이름]` |
-| 오프라인 연습 | `godot --path . -- --offline` |
+| 오프라인 연습 | `godot --path . -- --offline` (광장) / `--offline=obstacle_race` (미니게임 바로) |
 | 메뉴 | 인자 없음 |
 | 테스트 봇 | `--bot=walker|cheat|flood|badversion|silent --quit-after=초 [--report-at=초]` |
 | 스크린샷 QA | `--screenshot=경로.png [--shot-delay=초] [--emote=0..3]` |
@@ -36,6 +36,7 @@ scripts/
   multiplayer/
     game_server.gd                방 1개 서버: 입장/검증/시뮬레이션/스냅샷
     game_client.gd                접속/월드 구성/스냅샷 적용
+    offline_host.gd               오프라인·웹: GameMode 규칙을 서버 없이 로컬 실행 (서버 API 흉내)
   player/
     player_body.gd                CharacterBody3D 이동 규칙 (서버·클라 공용)
     local_player_controller.gd    입력 수집, 예측, 보정
@@ -83,5 +84,6 @@ func get_public_state() -> Dictionary          # 스냅샷에 실을 모드 상�
 
 ## 7. 알려진 제약
 - 캐릭터·맵은 프로토타입(프리미티브) 에셋. Blender 에셋 제작 필요.
-- 한글은 OS 시스템 폰트 폴백으로 표시 중 → 출시 전 Noto Sans KR(OFL) 등 폰트 동봉 필요 (모바일 기기별 차이 방지).
+- 한글 폰트: 나눔고딕(OFL) 동봉, 프로젝트 기본 폰트 (`assets/ui/fonts`).
 - 오디오 미구현.
+- 웹 빌드: Compatibility(WebGL2) 렌더러 → 해 그림자 끔, ENet 불가 → 오프라인 연습만 (BUILD_GUIDE §4).

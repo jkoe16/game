@@ -119,7 +119,8 @@ func setup_environment(sky_top: Color, sky_horizon: Color, sun_rot_deg: Vector3)
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = sun_rot_deg
 	sun.light_energy = 0.95
-	sun.shadow_enabled = true
+	# Compatibility 렌더러(웹·저사양 폴백)에서 그림자 켠 방향광 + 커스텀 light()가 과노출(전부 흰색)됨 → 그림자 끔
+	sun.shadow_enabled = RenderingServer.get_current_rendering_method() != "gl_compatibility"
 	sun.directional_shadow_max_distance = 60.0
 	add_child(sun)
 

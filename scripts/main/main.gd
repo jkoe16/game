@@ -102,6 +102,8 @@ func _start_client(host: String, port: int, offline: bool) -> void:
 	client = GameClient.new()
 	client.name = "GameClient"
 	client.offline = offline
+	if offline and typeof(args.get("offline")) == TYPE_STRING:
+		client.offline_start_mode = str(args["offline"])
 	client.address = host
 	client.port = port
 	client.nickname = str(args.get("nickname", "Player%d" % (randi() % 1000)))
@@ -169,6 +171,12 @@ func _build_menu() -> void:
 		menu.refresh_account())
 	menu.offline_requested.connect(func(nick: String) -> void:
 		args["nickname"] = nick
+		args["offline"] = true
+		_close_menu()
+		_start_client("", 0, true))
+	menu.practice_requested.connect(func(nick: String, practice_mode: String) -> void:
+		args["nickname"] = nick
+		args["offline"] = practice_mode
 		_close_menu()
 		_start_client("", 0, true))
 	menu.join_requested.connect(func(nick: String, addr: String) -> void:

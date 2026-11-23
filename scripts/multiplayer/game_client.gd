@@ -16,6 +16,10 @@ var appearance := Appearance.default_appearance()
 var platform := "pc"
 var bot_mode := ""
 var offline := false
+## 오프라인 시작 모드 (--offline=obstacle_race 처럼 바로 미니게임 연습)
+var offline_start_mode := "lobby"
+## 오프라인에서 게임 규칙을 로컬 실행하는 호스트
+var offline_host: OfflineHost
 var token := "dev-guest"
 ## objective 봇이 로비에서 찾아갈 포털 모드 (--bot-portal=obstacle_race)
 var bot_portal := ""
@@ -53,15 +57,38 @@ var _is_headless := DisplayServer.get_name() == "headless"
 
 func start() -> void:
 	if offline:
-		_load_map("lobby_plaza")
-		_spawn_local({"peer_id": 1, "pos": map.get_spawn_point(0), "appearance": appearance})
-		status_changed.emit("연습 모드 (오프라인)")
+		_start_offline(offline_start_mode)
 		return
 	Net.client_handler = self
 	multiplayer.connected_to_server.connect(_on_connected)
 	multiplayer.connection_failed.connect(_on_connection_failed)
 	multiplayer.server_disconnected.connect(_on_server_disconnected)
 	_connect()
+
+
+## 오프라인 연습: 서버 없이 맵 + GameMode 규칙을 로컬에서 실행 (로비 포털 → 미니게임 → 결과 → 로비)
+func _start_offline(p_mode_id: String) -> void:
+	if not ModeRegistry.has_mode(p_mode_id):
+		p_mode_id = "lobby"
+	my_id = OfflineHost.PEER_ID
+	mode_id = p_mode_id
+	welcomed = false
+	_load_map(ModeRegistry.map_for(p_mode_id))
+	_spawn_local({"peer_id": my_id, "pos": map.get_spawn_point(0), "appearance": appearance})
+	offline_host = OfflineHost.new()
+	offline_host.name = "OfflineHost"
+	add_child(offline_host)
+	offline_host.setup(self, p_mode_id)
+	offline_host.transfer_requested.connect(_on_offline_transfer)
+	controller.fell_handler = offline_host.on_fell
+	status_changed.emit("연습 모드 (오프라인) · %s" % map.display_name)
+
+
+func _on_offline_transfer(target_mode: String) -> void:
+	transfers.append(target_mode)
+	print("[CLIENT offline] transfer -> %s" % target_mode)
+	_reset_world()
+	_start_offline(target_mode)
 
 
 func _connect() -> void:
@@ -421,9 +448,10 @@ func on_transfer(route: Variant, target: Variant) -> void:
 
 func _reset_world() -> void:
 	welcomed = false
-	for n in [map, players_root, camera]:
+	for n in [map, players_root, camera, offline_host]:
 		if is_instance_valid(n):
 			n.queue_free()
+	offline_host = null
 	map = null
 	players_root = null
 	camera = null

@@ -35,6 +35,7 @@ func _ready() -> void:
 	_mode_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_mode_phase = _label(right, 20)
 	_mode_phase.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_mode_phase.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_board = _label(right, 18)
 	_board.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 
@@ -118,7 +119,7 @@ func _update_mode() -> void:
 	var results: Array = s.get("results", [])
 	_results.visible = phase == "results" and not results.is_empty()
 	if _results.visible:
-		var txt := "🏆 결과\n"
+		var txt := "결과\n"
 		for r in results:
 			var mark := " ★" if r.get("win") else ""
 			var me := " ← 나" if int(r.get("peer_id", 0)) == client.my_id else ""

@@ -3,6 +3,8 @@ extends CanvasLayer
 ## 임시 시작 메뉴 (Phase 12에서 3D 카툰 UI로 교체 예정). 큰 버튼 위주로 모바일에서도 누르기 쉽게 구성.
 
 signal offline_requested(nickname: String)
+## 오프라인으로 특정 미니게임 바로 연습 (mode_id)
+signal practice_requested(nickname: String, mode_id: String)
 signal host_requested(nickname: String)
 signal join_requested(nickname: String, address: String)
 signal logout_requested
@@ -74,7 +76,18 @@ func _ready() -> void:
 	look.add_child(_small_button("모자", func() -> void: _hat = (_hat + 1) % Appearance.HATS.size(); _refresh_look()))
 	_refresh_look()
 
-	box.add_child(_big_button("연습 모드 (오프라인)", func() -> void: offline_requested.emit(_nick.text.strip_edges())))
+	box.add_child(_big_button("연습 모드 (오프라인 광장)", func() -> void: offline_requested.emit(_nick.text.strip_edges())))
+	box.add_child(_big_button("장애물 레이스 바로 연습", func() -> void: practice_requested.emit(_nick.text.strip_edges(), "obstacle_race")))
+	# 웹 브라우저는 ENet(UDP) 접속 불가 → 온라인 버튼 숨김 (WebSocket 서버는 추후)
+	if OS.has_feature("web"):
+		_addr.visible = false
+		var note := Label.new()
+		note.text = "웹 버전은 혼자 연습만 가능해요 (온라인은 PC 버전)"
+		note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		note.add_theme_font_size_override("font_size", 16)
+		note.add_theme_color_override("font_color", Color(0.4, 0.4, 0.5))
+		box.add_child(note)
+		return
 	box.add_child(_big_button("로컬 서버 열고 접속", func() -> void: host_requested.emit(_nick.text.strip_edges())))
 	box.add_child(_big_button("서버 접속", func() -> void: join_requested.emit(_nick.text.strip_edges(), _addr.text.strip_edges())))
 

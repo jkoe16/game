@@ -9,6 +9,7 @@
 #            = data     : 목 Firebase+Firestore. 프로필 저장·보안 규칙 거부·서버의 프로필 로드·플레이 기록 저장
 #            = minigames: 미니게임 5종 서버 + 봇 2개씩, 한 판 전체 진행 (대기→카운트다운→경기→결과)
 #            = portal   : 로비 포털 → 장애물 레이스 서버 → 결과 후 로비 복귀
+#            = offline  : 서버 없이 로컬 규칙 실행 (오프라인/웹 연습): 포털 → 레이스 완주 → 로비 복귀
 #
 # 결과 판정은 tests/integration/check_results.js 가 수행한다 (Node.js 필요).
 set -u
@@ -107,6 +108,10 @@ case "$SCENARIO" in
     run srv_race 40 --server --auth=dev --mode=obstacle_race --port=17781 --lobby=127.0.0.1:"$PORT" --min-players=1 --wait-sec=1 --countdown-sec=1 --round-sec=8 --results-sec=2 --report-at=34
     sleep 2
     run traveler 33 --connect=127.0.0.1:"$PORT" --nickname=Traveler --bot=objective --bot-portal=obstacle_race
+    ;;
+  offline)
+    run offline_race 70 --offline=obstacle_race --bot=objective
+    run offline_portal 25 --offline --bot=objective --bot-portal=obstacle_race
     ;;
   touch)
     run touch 30 --touch-test

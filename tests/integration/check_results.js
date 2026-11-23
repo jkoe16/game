@@ -24,7 +24,7 @@ function scriptErrors(name) {
   return fs.readFileSync(file, "utf8").split(/\r?\n/).filter(l => /SCRIPT ERROR|Parse Error|Invalid call|Invalid access/.test(l));
 }
 
-const NO_MAIN_SERVER = ["authflow", "minigames", "touch"].includes(scenario);
+const NO_MAIN_SERVER = ["authflow", "minigames", "touch", "offline"].includes(scenario);
 const server = NO_MAIN_SERVER ? { players: [], stats: {} } : result("server", "SERVER_RESULT");
 if (!NO_MAIN_SERVER) check(server !== null, "server produced a report");
 if (!server) process.exit(1);
@@ -150,6 +150,17 @@ if (scenario === "portal") {
   check(race && race.rounds >= 1, "race server completed a round with the transferred player", race && `rounds=${race.rounds}`);
   const lobbyLog = fs.readFileSync(path.join(dir, "server.log"), "utf8");
   check((lobbyLog.match(/joined as 'Traveler'/g) || []).length >= 2, "player re-joined the lobby after the round");
+}
+
+if (scenario === "offline") {
+  // 서버 없이 로컬 GameMode: 로비 포털 → 장애물 레이스 한 판 → 로비 복귀 (웹 빌드 혼자 하기와 같은 경로)
+  const c = result("offline_portal", "CLIENT_RESULT");
+  check(c && c.transfers[0] === "obstacle_race", "offline lobby portal opened the obstacle race", c && JSON.stringify(c.transfers));
+  const r = result("offline_race", "CLIENT_RESULT");
+  const phases = r ? r.phases_seen : [];
+  check(["waiting", "countdown", "playing", "results"].every(p => phases.includes(p)), "offline race went through every phase", JSON.stringify(phases));
+  check(r && r.my_result && /완주/.test(r.my_result.score) && r.my_result.rank === 1, "offline bot finished the course", r && JSON.stringify(r.my_result));
+  check(r && r.transfers.includes("lobby") && r.mode === "lobby", "offline race returned to the lobby after results", r && JSON.stringify(r.transfers));
 }
 
 if (scenario === "touch") {

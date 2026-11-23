@@ -1,7 +1,7 @@
 class_name FirebaseConfig
 extends RefCounted
 ## Firebase 설정 로더.
-## 기본 파일: res://config/firebase.cfg (git 제외). 예시: res://config/firebase.example.cfg
+## 기본 파일: res://config/firebase.cfg (공개 식별자만 → git 포함). 다른 프로젝트용 예시: res://config/firebase.example.cfg
 ## 실행 인자 --firebase-config=<경로> 로 다른 파일 사용 가능 (테스트용 목 서버 등).
 ##
 ## 주의: 웹 API 키 / 프로젝트 ID / 데스크톱 OAuth 클라이언트 정보는 클라이언트 배포가 전제된 값이다.

@@ -5,6 +5,12 @@ PC·모바일 크로스플레이 3D 온라인 파티 게임 (Godot 4.7, 전용 �
 **웹에서 바로 해보기 (혼자 연습 · 게스트/이메일/Google 로그인): https://game-28f1b.web.app**
 — 브라우저 버전은 오프라인 연습만 가능 (광장 포털 → 미니게임 → 결과 → 광장). 온라인 멀티는 PC 버전.
 
+## 새 컴퓨터에서 시작
+```powershell
+git clone https://github.com/jkoe16/game.git; cd game
+powershell -ExecutionPolicy Bypass -File tools\setup_windows.ps1   # Godot·웹 템플릿 자동 설치
+```
+
 ## 빠른 시작
 ```bash
 export GODOT="/c/Users/User/Desktop/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe"

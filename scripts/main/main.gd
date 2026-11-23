@@ -172,11 +172,13 @@ func _build_menu() -> void:
 	menu.offline_requested.connect(func(nick: String) -> void:
 		args["nickname"] = nick
 		args["offline"] = true
+		await _save_profile_from_menu()
 		_close_menu()
 		_start_client("", 0, true))
 	menu.practice_requested.connect(func(nick: String, practice_mode: String) -> void:
 		args["nickname"] = nick
 		args["offline"] = practice_mode
+		await _save_profile_from_menu()
 		_close_menu()
 		_start_client("", 0, true))
 	menu.join_requested.connect(func(nick: String, addr: String) -> void:

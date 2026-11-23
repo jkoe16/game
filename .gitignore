@@ -20,3 +20,7 @@ config/firebase.cfg
 
 # 빌드 결과물 (웹 내보내기 등)
 /build/
+
+# Firebase Hosting 배포용 복사본 (build/web 에서 복사)
+server/firebase/public/
+server/firebase/.firebase/

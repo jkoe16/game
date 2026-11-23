@@ -88,3 +88,22 @@
 | 모드 규칙 문구가 화면 오른쪽 밖으로 잘림 | 스크린샷 | HUD 라벨 자동 줄바꿈 |
 
 **미검증**: 실제 GPU가 있는 브라우저(데스크톱 Chrome/Safari, 모바일 브라우저)에서의 FPS·터치 조작, 배포된 GitHub Pages 주소에서의 실제 플레이.
+## 9. 웹 로그인 (실제 Firebase game-28f1b, 2026-11-23)
+| 항목 | 결과 |
+|---|---|
+| 로그인 제공자 확인 (계정 생성 없이) | 이메일/비밀번호 ✅, Google ✅ 켜져 있음 |
+| 게스트 로그인 → Firebase 인증 모드 게임 서버 입장 (헤드리스, 실제 토큰·실제 공개키 서명 검증) | ✅ 입장 성공 |
+| 웹 빌드: 로그인 화면 → 게스트 로그인 → 메뉴 (Edge 헤드리스, localhost) | ✅ |
+| 웹 빌드: 새로고침 후 자동 로그인 (같은 게스트 uid) | ✅ |
+| 웹 빌드: Google 버튼 → Google 로그인 팝업 열림 (localhost) | ✅ 팝업까지 확인. 실제 계정 선택·로그인 완료는 사람이 해야 해서 미검증 |
+| 승인되지 않은 도메인에서 Google 버튼 | ✅ 한국어 안내 메시지 |
+| Firestore 프로필 저장/읽기 (실제 프로젝트) | ❌ PERMISSION_DENIED — 보안 규칙 미배포(기본 "전부 거부" 상태). 로그인·게임 진행은 영향 없음 |
+
+**발견·수정**
+| 문제 | 조치 |
+|---|---|
+| 웹에서 모든 Firebase 응답이 "HTTP_200 오류" | 브라우저가 이미 gzip을 풀었는데 Godot가 다시 풀다 실패 → 웹에서 `HTTPRequest.accept_gzip = false` |
+| 웹에서 `OS.get_unique_id()` 오류 | 세션 암호화 키를 웹에선 고정값으로 |
+| 웹에서 PC용 Google OAuth(로컬 포트 콜백) 불가 | Firebase JS SDK 팝업으로 Google ID 토큰만 받아 기존 REST 로그인/연결 경로 사용 (`web_google_auth.gd` + 내보내기 head_include) |
+
+**테스트 계정**: 위 테스트로 익명(게스트) 계정 몇 개가 실제 프로젝트에 생김 (Firebase 콘솔 → Authentication → 사용자에서 삭제 가능).

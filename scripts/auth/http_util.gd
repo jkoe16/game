@@ -9,6 +9,9 @@ const TIMEOUT_SEC := 15.0
 static func request(owner: Node, url: String, method := HTTPClient.METHOD_GET, body := "", headers: PackedStringArray = []) -> Dictionary:
 	var req := HTTPRequest.new()
 	req.timeout = TIMEOUT_SEC
+	# 웹: 브라우저(fetch)가 gzip을 이미 풀어서 넘겨줌 → Godot가 다시 풀면 실패해 본문이 비어 버린다
+	if OS.has_feature("web"):
+		req.accept_gzip = false
 	owner.add_child(req)
 	var err := req.request(url, headers, method, body)
 	if err != OK:

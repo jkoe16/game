@@ -52,7 +52,8 @@ bash tests/integration/net_test.sh capacity
   - 렌더러는 Compatibility(WebGL2) 고정. 이 렌더러에서는 그림자 켠 방향광이 과노출되어 **해 그림자를 끔** (`GameMap.setup_environment`)
   - 브라우저는 ENet(UDP) 불가 → 메뉴에 온라인 버튼 숨김, 오프라인 연습만. 온라인 웹 지원은 WebSocket/WebRTC 서버 필요 (미구현)
   - 브라우저는 OS 폰트 폴백이 없음 → 한글 폰트 `assets/ui/fonts/NanumGothic-Regular.ttf` (OFL) 를 프로젝트 기본 폰트로 지정
-  - `config/firebase.cfg`는 웹 빌드에 포함하지 않음 → 웹은 로그인 없는 개발 모드
+  - 로그인: 내보내기 때 `config/firebase.cfg`를 포함 (include_filter). 파일은 git 제외라 빌드하는 PC에 있어야 함 (없으면 로그인 없는 개발 모드)
+  - 웹 Google 로그인: Firebase JS SDK 팝업 (`html/head_include`의 `window.pwGoogleSignIn`) → **Firebase 콘솔 → Authentication → 설정 → 승인된 도메인에 `jkoe16.github.io` 추가 필요**
 
 ### 그 밖의 플랫폼 (Phase 9에서 구성 예정)- Windows/Linux 전용 서버: 내보내기 프리셋 "Dedicated Server" (리소스 → 서버용 비시각 리소스 제거) — 미구성
 - Windows/macOS 클라이언트, Android(APK/AAB), iOS(Xcode 프로젝트) — 미구성

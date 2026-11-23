@@ -76,7 +76,7 @@ func _on_guest() -> void:
 
 
 func _on_google() -> void:
-	_set_status("브라우저에서 Google 로그인을 완료해 주세요...", false)
+	_set_status("Google 로그인 창에서 계정을 선택해 주세요..." if OS.has_feature("web") else "브라우저에서 Google 로그인을 완료해 주세요...", false)
 	await _run(Auth.sign_in_google)
 
 

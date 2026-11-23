@@ -102,6 +102,15 @@ func link_email(p_email: String, password: String) -> Dictionary:
 func sign_in_google() -> Dictionary:
 	if OS.has_feature("mobile"):
 		return {"ok": false, "error": "모바일 Google 로그인은 준비 중입니다. (네이티브 플러그인 필요)", "code": "GOOGLE_MOBILE_NOT_READY"}
+	if OS.has_feature("web"):
+		# 웹: Firebase JS SDK 팝업으로 Google ID 토큰만 받고, 로그인/연결은 아래 REST 경로로 (PC와 동일)
+		var web := WebGoogleAuth.new()
+		add_child(web)
+		var w: Dictionary = await web.authorize(config, is_signed_in() and is_anonymous())
+		web.queue_free()
+		if not w["ok"]:
+			return {"ok": false, "error": w["error"], "code": "GOOGLE_WEB"}
+		return await sign_in_with_google_id_token(w["id_token"])
 	if not config.is_google_ready():
 		return {"ok": false, "error": "Google 로그인 설정(데스크톱 OAuth 클라이언트 ID)이 없습니다.", "code": "GOOGLE_NOT_CONFIGURED"}
 	var oauth := GoogleDesktopOAuth.new()
@@ -233,7 +242,8 @@ func _save_session() -> void:
 
 ## 세션 파일 암호화 키: 기기 고유값 기반 (다른 기기로 복사된 파일은 열리지 않음)
 func _session_pass() -> String:
-	return "3dpw-" + OS.get_unique_id()
+	# 웹은 기기 고유값이 없음 → 고정값 (세션은 이 사이트의 브라우저 저장소에만 있음)
+	return "3dpw-" + ("web" if OS.has_feature("web") else OS.get_unique_id())
 
 
 func _validate_email_pw(p_email: String, password: String) -> Dictionary:

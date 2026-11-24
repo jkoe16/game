@@ -83,5 +83,15 @@ jobs:
           printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
           cd server/firebase
           GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json" npx --yes firebase-tools@latest deploy --only hosting --project game-28f1b --non-interactive
-          rm -f "$RUNNER_TEMP/sa.json"
           echo "- Firebase: https://game-28f1b.web.app" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Firestore 보안 규칙 배포
+        if: steps.fb.outputs.ok == 'true'
+        continue-on-error: true   # 서비스 계정에 규칙 배포 권한이 없으면 건너뜀 (게임은 동작)
+        run: |
+          cd server/firebase
+          GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json" npx --yes firebase-tools@latest deploy --only firestore:rules --project game-28f1b --non-interactive
+
+      - name: 정리
+        if: always()
+        run: rm -f "$RUNNER_TEMP/sa.json"

@@ -172,7 +172,7 @@ func get_appearance() -> Dictionary:
 
 
 func _refresh_look() -> void:
-	_look_label.text = "외형: 색상 %d / 모자 %s" % [_color + 1, Appearance.HATS[_hat]]
+	_look_label.text = "외형: %s / %s" % [Appearance.COLOR_NAMES[_color], Appearance.HAT_NAMES[_hat]]
 	_look_label.add_theme_color_override("font_color", Appearance.BODY_COLORS[_color].darkened(0.3))
 
 

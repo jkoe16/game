@@ -48,6 +48,10 @@ func _ready() -> void:
 
 	for i in 8:
 		spawn_points.append(Vector3(-5.25 + i * 1.5, 0.5, -7.0))
+	# 장애물 돌파: 2번 방은 낮은 회전 막대, 3번 방은 반대로 도는 막대 2개 (발판 위에서 점프하며 버티기)
+	add_sweeper(Vector3(0, 0, ROOM_LEN + 0.5), 6.2, 0.5, 55.0, 0.0, 0.0, 2, 0.4, Color(1.0, 0.55, 0.4))
+	add_sweeper(Vector3(0, 0, 2 * ROOM_LEN + 0.5), 6.2, 0.5, -70.0, 45.0, 0.0, 2, 0.4, Color(0.55, 0.6, 1.0))
+	item_spawns = [Vector3(0, 1.2, ROOM_LEN - 8.0), Vector3(0, 1.2, 2 * ROOM_LEN - 8.0)]
 	_decorate()
 
 

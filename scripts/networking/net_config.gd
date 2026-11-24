@@ -2,7 +2,7 @@ class_name NetConfig
 extends RefCounted
 ## 네트워크 공용 상수. 서버와 클라이언트가 반드시 같은 값을 사용해야 한다.
 
-const PROTOCOL_VERSION := 1
+const PROTOCOL_VERSION := 2  # 2: 스냅샷에 아이템(점프 강화·보호막) 시간 추가
 const DEFAULT_PORT := 7777
 const DEFAULT_MAX_PLAYERS := 8
 ## 정원 초과 접속자에게 "room_full" 거절 메시지를 보내기 위한 여유 슬롯

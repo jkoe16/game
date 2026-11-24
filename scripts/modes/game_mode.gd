@@ -27,6 +27,18 @@ var results_ticks := 8 * 60
 ## 결과 후 로비로 돌려보낼 주소 ("" 이면 이 서버에서 다음 라운드 대기)
 var lobby_route := ""
 
+# ---- 공통 재미 요소: 아이템 상자 + 판마다 랜덤 이벤트
+const ITEM_KINDS := ["speed", "jump", "shield"]
+const ITEM_NAMES := {"speed": "속도 UP", "jump": "점프 강화", "shield": "보호막"}
+const ITEM_PICK_RADIUS := 1.4
+## [[x, y, z, alive(0/1), kind_index], ...] (맵의 item_spawns 위치)
+var items: Array = []
+var _item_back := {}   # 아이템 번호 → 다시 나타날 틱
+var item_respawn_ticks := 8 * 60
+## 이번 판 랜덤 이벤트 이름 ("" = 없음)
+var event := ""
+var _rng_round := RandomNumberGenerator.new()
+
 
 func setup(p_server: Node, p_map: GameMap, cfg: Dictionary) -> void:
 	server = p_server
@@ -78,6 +90,29 @@ func _is_win(_e: Dictionary, rank: int) -> bool:
 ## 모드 고유 공개 상태 (문, 코인 등)
 func _extra_state() -> Dictionary:
 	return {}
+
+## 이 모드에서 나올 수 있는 랜덤 이벤트 (모드가 늘릴 수 있음)
+func event_pool() -> Array:
+	return ["아이템 폭풍", "부스트 출발", "보호막 출발"]
+
+## 이벤트 시작 효과 (모드 고유 이벤트는 재정의해서 처리)
+func _apply_event(ev: String) -> void:
+	match ev:
+		"아이템 폭풍":
+			item_respawn_ticks = 3 * 60
+		"부스트 출발":
+			for e in playing_entries():
+				server.give_item(e["peer_id"], "speed", 3.0)
+		"보호막 출발":
+			for e in playing_entries():
+				server.give_item(e["peer_id"], "shield", 6.0)
+
+const EVENT_TEXT := {
+	"아이템 폭풍": "아이템 상자가 3초마다 다시 생겨요",
+	"부스트 출발": "모두 속도 UP으로 출발!",
+	"보호막 출발": "모두 6초 보호막으로 출발!",
+	"황금 러시": "황금 별이 15초마다 나타나요!",
+}
 
 ## 낙하 시 처리: 리스폰 위치 반환. Vector3.INF = 탈락(관전석으로)
 func on_fell(_peer_id: int) -> Vector3:
@@ -160,14 +195,60 @@ func server_tick(t: int) -> void:
 				round_start_tick = t
 				phase_end_tick = t + round_ticks
 				_on_round_start()
+				_start_extras()
 				dirty = true
 		"playing":
+			_items_tick()
 			_mode_tick()
 			if _is_over() or t >= phase_end_tick:
 				_end_round()
 		"results":
 			if t >= phase_end_tick:
 				_after_results()
+
+
+## 라운드 시작: 아이템 상자 배치 + 랜덤 이벤트 하나
+func _start_extras() -> void:
+	_rng_round.seed = Time.get_ticks_usec() ^ hash(mode_id())
+	item_respawn_ticks = 8 * 60
+	items = []
+	_item_back = {}
+	for i in map.item_spawns.size():
+		var p: Vector3 = map.item_spawns[i]
+		items.append([p.x, p.y, p.z, 1, _rng_round.randi() % ITEM_KINDS.size()])
+	var pool := event_pool()
+	event = pool[_rng_round.randi() % pool.size()] if not pool.is_empty() else ""
+	if event != "":
+		_apply_event(event)
+		announce("이번 판 이벤트: %s! %s" % [event, EVENT_TEXT.get(event, "")])
+
+
+func _items_tick() -> void:
+	for i in items.size():
+		var it: Array = items[i]
+		if it[3] == 0:
+			if tick >= int(_item_back.get(i, 0)):
+				it[3] = 1
+				it[4] = _rng_round.randi() % ITEM_KINDS.size()
+				dirty = true
+			continue
+		var ip := Vector3(it[0], it[1], it[2])
+		for e in entries.values():
+			if e["status"] != "playing":
+				continue
+			var pos: Vector3 = server.get_player_pos(e["peer_id"]) + Vector3(0, 0.8, 0)
+			if pos.distance_to(ip) <= ITEM_PICK_RADIUS:
+				it[3] = 0
+				_item_back[i] = tick + item_respawn_ticks
+				var kind: String = ITEM_KINDS[it[4]]
+				# 역전 기회: 뒤처진 절반은 효과가 1.5배 길다
+				var ranked := _ranked()
+				var behind := ranked.size() >= 2 and ranked.find(e) >= ranked.size() / 2
+				var secs: float = {"speed": 3.0, "jump": 6.0, "shield": 6.0}[kind] * (1.5 if behind else 1.0)
+				server.give_item(e["peer_id"], kind, secs)
+				server.notify_player(e["peer_id"], "!%s%s" % [ITEM_NAMES[kind], " (역전 찬스 1.5배!)" if behind else ""])
+				dirty = true
+				break
 
 
 func _begin_countdown() -> void:
@@ -214,6 +295,8 @@ func _after_results() -> void:
 		server.transfer_all(lobby_route, "round_over")
 	phase = "waiting"
 	phase_end_tick = 0
+	items = []
+	event = ""
 	for e in entries.values():
 		e["status"] = "waiting"
 		e["score"] = 0
@@ -233,8 +316,15 @@ func public_state() -> Dictionary:
 		"mode": mode_id(), "title": title(), "rules": rules_text(), "phase": phase,
 		"phase_end_tick": phase_end_tick, "round_start_tick": round_start_tick, "tick": tick,
 		"min_players": min_players, "board": _board_lines(), "players": plist,
-		"results": last_results if phase == "results" else [], "extra": _extra_state(),
+		"results": last_results if phase == "results" else [], "extra": _extra_with_items(),
 	}
+
+
+func _extra_with_items() -> Dictionary:
+	var x := _extra_state()
+	x["items"] = items
+	x["event"] = event
+	return x
 
 
 func _board_lines() -> Array:

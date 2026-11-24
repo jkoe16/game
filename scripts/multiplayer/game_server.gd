@@ -402,7 +402,7 @@ func _simulate_one(sp: ServerPlayer, input: PlayerInput, delta: float) -> void:
 	var before := sp.body.global_position
 	sp.body.simulate(input, delta, tick)
 	var after := sp.body.global_position
-	if sp.body.stun_time <= 0.0 and sp.body.boost_time <= 0.0 and sp.body.floor_mover < 0:
+	if sp.body.stun_time <= 0.0 and sp.body.boost_time <= 0.0 and sp.body.floor_mover < 0 and sp.body.shield_time <= 0.0:
 		sp.max_speed = maxf(sp.max_speed, Vector2(after.x - before.x, after.z - before.z).length() / delta)
 	if after.y < map.kill_height:
 		var p := mode.on_fell(sp.peer_id)
@@ -423,6 +423,8 @@ func _send_snapshot() -> void:
 			"air": sp.body.air_time,
 			"stun": sp.body.stun_time,
 			"boost": sp.body.boost_time,
+			"jumpb": sp.body.jump_boost_time,
+			"shield": sp.body.shield_time,
 			"mover": sp.body.floor_mover,
 			"flags": (SnapshotCodec.FLAG_GROUNDED if sp.body.is_on_floor() else 0) | (SnapshotCodec.FLAG_FROZEN if sp.body.frozen else 0) | (SnapshotCodec.FLAG_OUT if mode.is_out(sp.peer_id) else 0),
 			"ack": sp.ack,
@@ -542,6 +544,23 @@ func transfer_player(peer_id: int, route: String, target: String) -> void:
 func transfer_all(route: String, target: String) -> void:
 	for id in _active_ids():
 		transfer_player(id, route, target)
+
+
+## 아이템 효과 적용 (모드가 획득을 판정한 뒤 호출). kind: speed / jump / shield, secs: 지속 시간
+func give_item(peer_id: int, kind: String, secs: float) -> void:
+	if not players.has(peer_id):
+		return
+	_apply_item(players[peer_id].body, kind, secs)
+
+
+static func _apply_item(body: PlayerBody, kind: String, secs: float) -> void:
+	match kind:
+		"speed":
+			body.boost_time = maxf(body.boost_time, secs)
+		"jump":
+			body.jump_boost_time = maxf(body.jump_boost_time, secs)
+		"shield":
+			body.shield_time = maxf(body.shield_time, secs)
 
 
 func notify_player(peer_id: int, text: String) -> void:

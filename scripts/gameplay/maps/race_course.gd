@@ -38,8 +38,10 @@ func _ready() -> void:
 
 	# B: 넓은 무대 + 낮은 회전 막대 2개 (점프로 넘기)
 	add_box(Vector3(0, -0.5, 44), Vector3(14, 1, 20), PATH)
-	add_sweeper(Vector3(-3.5, 0, 40), 4.5, 0.5, 100.0)
-	add_sweeper(Vector3(3.5, 0, 48), 4.5, 0.5, -120.0, 90.0)
+	add_sweeper(Vector3(-3.5, 0, 40), 4.5, 0.5, 100.0, 0.0, 0.0, 1, 0.4, Color(1.0, 0.45, 0.4), true)
+	# 후반 패턴: 이 망치는 점점 느려지다 30초쯤 멈춘 뒤 반대 방향으로 빨라진다
+	add_sweeper(Vector3(3.5, 0, 48), 4.5, 0.5, -120.0, 90.0, 4.0, 1, 0.4, Color(1.0, 0.6, 0.3), true)
+	add_pad("boost", Vector3(-5.0, 0, 52.0), Vector3(1.6, 0.3, 1.4))
 
 	# C: 빠른 길(이동 발판 3개) / 쉬운 길(오른쪽 좁은 다리)
 	add_box(Vector3(0, -0.5, 55), Vector3(14, 1, 2), GROUND)
@@ -53,17 +55,19 @@ func _ready() -> void:
 	# D: 착지 무대 + 점프 패드 → 윗층
 	add_box(Vector3(0, -0.5, 86), Vector3(14, 1, 20), GROUND)
 	add_pad("jump", Vector3(0, 0, 93.5), Vector3(2.0, 0.3, 1.2), 15.0)
+	add_pad("boost", Vector3(4.5, 0, 81.0), Vector3(1.6, 0.3, 1.4))
 	add_box(Vector3(0, 1.75, 105), Vector3(14, 3.5, 14), UPPER.darkened(0.25))
 	add_box(Vector3(0, 3.25, 105), Vector3(14, 0.5, 14), UPPER)
 
 	# E: 윗층 막대(양쪽 팔) + 결승
-	add_sweeper(Vector3(0, 3.5, 105), 6.0, 4.0, 75.0, 0.0, 0.0, 2)
+	add_sweeper(Vector3(0, 3.5, 105), 6.0, 4.0, 75.0, 0.0, 1.5, 2)  # 시간이 지날수록 빨라짐 (최고 속도 제한)
 	add_box(Vector3(0, 3.0, 117), Vector3(14, 1, 10), Color(1.0, 0.9, 0.5))
 	add_checker(Vector3(0, 3.5, finish_z), 14, 1.4)
 	add_label(Vector3(0, 9.0, finish_z), "결승선", 110, Color(1, 0.95, 0.5))
 
 	for i in 8:
 		spawn_points.append(Vector3(-5.25 + i * 1.5, 0.5, -3.0))
+	item_spawns = [Vector3(-3, 1.2, 10), Vector3(3, 1.2, 36), Vector3(-4, 1.2, 80), Vector3(4, 4.7, 111)]
 	_decorate()
 
 

@@ -430,6 +430,7 @@ func on_mode_state(state: Variant) -> void:
 	if map:
 		map.round_start_tick = int(state.get("round_start_tick", 0))
 		map.apply_mode_state(state)
+		map.render_items(state.get("extra", {}).get("items", []))
 	var me: Dictionary = state.get("players", {}).get(str(my_id), {})
 	if local_player:
 		# 서버와 같은 규칙으로 이동 금지 예측 (카운트다운 / 완주 후)

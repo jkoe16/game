@@ -85,5 +85,10 @@ func transfer_all(route: String, target: String) -> void:
 	transfer_player(PEER_ID, route, target)
 
 
+func give_item(peer_id: int, kind: String, secs: float) -> void:
+	if peer_id == PEER_ID and client.local_player:
+		GameServer._apply_item(client.local_player, kind, secs)
+
+
 func notify_player(_peer_id: int, text: String) -> void:
 	client.status_changed.emit(text)

@@ -10,6 +10,10 @@ extends Node3D
 var spawn_points: Array[Vector3] = []
 ## 넓은 발판 아래에 바위층을 자동으로 붙인다 (시각 전용). 직접 꾸미는 맵은 false
 var auto_underside := true
+## 아이템 상자 위치 (모드가 라운드마다 여기에 상자를 놓는다)
+var item_spawns: Array[Vector3] = []
+var _item_nodes: Array = []
+const ITEM_COLORS := [Color(1.0, 0.75, 0.25), Color(0.45, 0.95, 0.6), Color(0.55, 0.75, 1.0)]  # 속도·점프·보호막
 var is_headless := DisplayServer.get_name() == "headless"
 
 # ---- 동적 월드 (틱 번호로 결정론적으로 계산 → 서버/클라이언트 동기화 메시지 불필요)
@@ -539,7 +543,7 @@ func _add_mesh(root: Node3D, mesh: Mesh, color: Color) -> void:
 # ================================================================== 동적 월드 API
 
 ## 회전 막대. arms=2면 양쪽으로 뻗은 막대. omega/accel 단위: 도/초, 도/초²
-func add_sweeper(center: Vector3, radius: float, bar_y: float, omega_deg: float, phase_deg := 0.0, accel_deg := 0.0, arms := 1, thickness := 0.4, color := Color(1.0, 0.45, 0.4)) -> void:
+func add_sweeper(center: Vector3, radius: float, bar_y: float, omega_deg: float, phase_deg := 0.0, accel_deg := 0.0, arms := 1, thickness := 0.4, color := Color(1.0, 0.45, 0.4), hammer := false) -> void:
 	var pivot := Node3D.new()
 	pivot.position = Vector3(center.x, bar_y, center.z)
 	add_child(pivot)
@@ -564,6 +568,13 @@ func add_sweeper(center: Vector3, radius: float, bar_y: float, omega_deg: float,
 			sm.position = Vector3(0, 0, z0 - length * 0.5 + (i + 0.5) * length / n)
 			pivot.add_child(sm)
 		for end_z in ([-radius, radius] if arms == 2 else [radius]):
+			if hammer:  # 회전 망치 머리 (판정은 막대와 같음)
+				var head := MeshInstance3D.new()
+				head.mesh = cyl_mesh(0.42, 0.42, 1.1, 16)
+				head.material_override = toon_material(color.darkened(0.1))
+				head.position = Vector3(0, 0, end_z)
+				pivot.add_child(head)
+				continue
 			var cap := MeshInstance3D.new()
 			cap.mesh = sphere_mesh(r * 1.7, 14)
 			cap.material_override = toon_material(color.lightened(0.25))
@@ -668,7 +679,42 @@ func set_gate_open(i: int, open: bool) -> void:
 
 
 ## 틱 번호에 맞춰 이동 발판/회전 막대 위치를 설정 (시뮬레이션 직전에 호출)
+## 아이템 상자 표시 (클라이언트). items: [[x, y, z, alive, kind], ...]
+func render_items(list: Array) -> void:
+	if is_headless:
+		return
+	while _item_nodes.size() < list.size():
+		var root := Node3D.new()
+		add_child(root)
+		var box := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = Vector3(0.8, 0.8, 0.8)
+		box.mesh = bm
+		root.add_child(box)
+		var q := Label3D.new()
+		q.text = "?"
+		q.font_size = 96
+		q.pixel_size = 0.008
+		q.outline_size = 16
+		q.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		q.no_depth_test = false
+		root.add_child(q)
+		_item_nodes.append(root)
+	for i in _item_nodes.size():
+		var n: Node3D = _item_nodes[i]
+		if i >= list.size():
+			n.visible = false
+			continue
+		var it: Array = list[i]
+		n.position = Vector3(it[0], it[1], it[2])
+		n.visible = int(it[3]) == 1
+		var box: MeshInstance3D = n.get_child(0)
+		box.material_override = glow_material(ITEM_COLORS[int(it[4]) % ITEM_COLORS.size()], 1.3)
+
+
 func update_world(tick: int) -> void:
+	for n in _item_nodes:
+		(n as Node3D).get_child(0).rotation = Vector3(0.4, tick * 0.04, 0.3)
 	for i in movers.size():
 		(movers[i]["node"] as Node3D).global_position = mover_pos(i, tick)
 	for s in sweepers:

@@ -9,6 +9,8 @@ extends Node
 ##   오차가 크면 서버 상태로 되돌린 뒤 아직 서버가 처리하지 않은 입력을 다시 시뮬레이션한다.
 
 const CORRECTION_EPSILON := 0.05
+## 점프 입력 여유: PlayerBody.JUMP_HOLD_TICKS 동안 점프 입력을 유지 (입력에 담기므로 서버·예측 결과 동일)
+const JUMP_HOLD_TICKS := PlayerBody.JUMP_HOLD_TICKS
 const MAX_HISTORY := 240
 const BOT_MODES: Array[String] = ["walker", "cheat", "flood", "objective"]
 
@@ -20,6 +22,7 @@ var bot_mode := ""
 ## 모바일 가상 조이스틱 등 외부 입력원 (Phase 3). 값이 있으면 키보드 입력과 합산.
 var external_move := Vector2.ZERO
 var external_jump := false
+var _jump_hold := 0
 
 var seq := 0
 var history: Array = []   # [{seq:int, input:PlayerInput, pos:Vector3, wt:int}]
@@ -92,7 +95,12 @@ func _gather_input(delta: float) -> PlayerInput:
 		v *= 0.5
 	var cam_yaw := camera.yaw if camera else 0.0
 	inp.set_move(v.rotated(-cam_yaw))
-	inp.jump = Input.is_action_just_pressed("jump") or external_jump
+	if Input.is_action_just_pressed("jump") or external_jump:
+		_jump_hold = JUMP_HOLD_TICKS
+	inp.jump = _jump_hold > 0
+	_jump_hold = maxi(_jump_hold - 1, 0)
+	if inp.jump and body and body.velocity.y > 2.0:
+		_jump_hold = 0  # 이미 뛰어올랐으면 남은 유지 입력은 버린다
 	inp.interact = Input.is_action_just_pressed("interact")
 	external_jump = false
 	return inp
@@ -160,6 +168,8 @@ func _reconcile_now(e: Dictionary) -> void:
 	body.air_time = e["air"]
 	body.stun_time = e.get("stun", 0.0)
 	body.boost_time = e.get("boost", 0.0)
+	body.jump_boost_time = e.get("jumpb", 0.0)
+	body.shield_time = e.get("shield", 0.0)
 	body.floor_mover = e.get("mover", -1)
 	var dt := 1.0 / Engine.physics_ticks_per_second
 	for h in history:

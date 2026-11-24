@@ -1,13 +1,13 @@
 class_name SnapshotCodec
 extends RefCounted
 ## 서버 상태 스냅샷 직렬화.
-## 형식: [tick:u32, count:u8] + count * [id:s32, pos:3f, vel:3f, yaw:f, air:f, stun:f, boost:f,
+## 형식: [tick:u32, count:u8] + count * [id:s32, pos:3f, vel:3f, yaw:f, air:f, stun:f, boost:f, jumpb:f, shield:f,
 ##                                       flags:u8, mover:s8, ack:u32, ack_tick:u32]
 ## ack_tick = 서버가 ack 입력을 처리한 서버 틱 → 클라이언트가 장애물 예측 틱을 맞추는 데 사용
 ## 플레이어당 54바이트 → 8인 기준 약 440바이트 * 30Hz ≈ 13KB/s (추후 양자화로 축소 예정)
 
 const HEADER_BYTES := 5
-const BYTES_PER_PLAYER := 54
+const BYTES_PER_PLAYER := 62
 const FLAG_GROUNDED := 1
 const FLAG_FROZEN := 2
 const FLAG_OUT := 4        # 탈락/관전
@@ -26,6 +26,8 @@ static func encode(tick: int, entries: Array) -> PackedByteArray:
 		buf.put_float(e["air"])
 		buf.put_float(e.get("stun", 0.0))
 		buf.put_float(e.get("boost", 0.0))
+		buf.put_float(e.get("jumpb", 0.0))
+		buf.put_float(e.get("shield", 0.0))
 		buf.put_u8(e["flags"])
 		buf.put_8(e.get("mover", -1))
 		buf.put_u32(e["ack"])
@@ -53,6 +55,8 @@ static func decode(bytes: PackedByteArray) -> Dictionary:
 		e["air"] = buf.get_float()
 		e["stun"] = buf.get_float()
 		e["boost"] = buf.get_float()
+		e["jumpb"] = buf.get_float()
+		e["shield"] = buf.get_float()
 		e["flags"] = buf.get_u8()
 		e["mover"] = buf.get_8()
 		e["ack"] = buf.get_u32()

@@ -18,7 +18,7 @@ func title() -> String:
 	return "레이싱"
 
 func rules_text() -> String:
-	return "트랙 %d바퀴! 노란 부스트로 빨라지고, 초록 점프대로 벽을 넘어요" % LAPS
+	return "트랙 %d바퀴! 노란 부스터로 빨라지고, 초록 점프대로 벽을 넘고, 남쪽 막대는 점프! ? 상자 = 아이템" % LAPS
 
 
 func _init_entry(e: Dictionary) -> void:

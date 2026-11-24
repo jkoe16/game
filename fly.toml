@@ -1,0 +1,32 @@
+# Fly.io 배포 설정 (server/cloud/README.md 참고)
+# app 이름은 `fly launch --no-deploy --copy-config` 때 정해집니다 (전 세계에서 고유해야 함)
+app = "3d-party-world"
+primary_region = "nrt"   # 도쿄 (한국에서 가장 가까움)
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8080"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"     # 아무도 없으면 꺼져서 비용 절약
+  auto_start_machines = true      # 누가 접속하면 자동으로 켜짐 (5~10초)
+  min_machines_running = 0
+  [http_service.concurrency]
+    type = "connections"
+    soft_limit = 100
+    hard_limit = 200
+
+[[http_service.checks]]
+  grace_period = "20s"
+  interval = "30s"
+  method = "GET"
+  path = "/healthz"
+  timeout = "5s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"

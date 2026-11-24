@@ -9,6 +9,8 @@
 #            = data     : 목 Firebase+Firestore. 프로필 저장·보안 규칙 거부·서버의 프로필 로드·플레이 기록 저장
 #            = minigames: 미니게임 5종 서버 + 봇 2개씩, 한 판 전체 진행 (대기→카운트다운→경기→결과)
 #            = portal   : 로비 포털 → 장애물 레이스 서버 → 결과 후 로비 복귀
+#            = ws       : basic과 같지만 WebSocket 전송 (웹 브라우저 접속 경로)
+#            = gateway  : 클라우드 게이트웨이(server/cloud/gateway.js)가 서버 6개 실행, 봇이 ws://게이트웨이/ 로 접속 → 포털 → 레이스 → 로비
 #            = offline  : 서버 없이 로컬 규칙 실행 (오프라인/웹 연습): 포털 → 레이스 완주 → 로비 복귀
 #
 # 결과 판정은 tests/integration/check_results.js 가 수행한다 (Node.js 필요).
@@ -58,6 +60,27 @@ case "$SCENARIO" in
     run badversion 6 --connect=127.0.0.1:"$PORT" --nickname=OldClient --bot=badversion
     run silent 10 --connect=127.0.0.1:"$PORT" --nickname=Silent --bot=silent
     ;;
+  ws)
+    WS="ws://127.0.0.1:$PORT"
+    run server 17 --server --transport=ws --auth=dev --port="$PORT" --max-players=8 --report-at=11.5
+    sleep 2
+    run walker1 12 --connect="$WS" --nickname=Walker1 --bot=walker
+    run walker2 12 --connect="$WS" --nickname=Walker2 --bot=walker
+    sleep 1
+    run cheat 11 --connect="$WS" --nickname=Cheater --bot=cheat
+    run flood 11 --connect="$WS" --nickname=Flooder --bot=flood
+    run badversion 6 --connect="$WS" --nickname=OldClient --bot=badversion
+    run silent 10 --connect="$WS" --nickname=Silent --bot=silent
+    ;;
+  gateway)
+    GW_PORT=18080
+    PORT=$GW_PORT PORT_OFFSET=10000 GODOT_BIN="$GODOT" GAME_DIR="$ROOT" AUTH_MODE=dev \
+      MINIGAME_ARGS="--min-players=1 --wait-sec=1 --countdown-sec=1 --round-sec=8 --results-sec=2" \
+      node "$ROOT/server/cloud/gateway.js" > "$OUT/gateway.txt" 2>&1 &
+    GW_PID=$!
+    sleep 4
+    run traveler 33 --connect="ws://127.0.0.1:$GW_PORT/" --nickname=Traveler --bot=objective --bot-portal=obstacle_race
+    ;;
   capacity)
     run server 17 --server --auth=dev --port="$PORT" --max-players=8 --report-at=11.5
     sleep 2
@@ -104,8 +127,8 @@ case "$SCENARIO" in
     done
     ;;
   portal)
-    run server 40 --server --auth=dev --mode=lobby --port="$PORT" --routes=obstacle_race=127.0.0.1:17781 --report-at=34
-    run srv_race 40 --server --auth=dev --mode=obstacle_race --port=17781 --lobby=127.0.0.1:"$PORT" --min-players=1 --wait-sec=1 --countdown-sec=1 --round-sec=8 --results-sec=2 --report-at=34
+    run server 40 --server --auth=dev --mode=lobby --port="$PORT" --routes=obstacle_race=:17781 --report-at=34
+    run srv_race 40 --server --auth=dev --mode=obstacle_race --port=17781 --lobby=:"$PORT" --min-players=1 --wait-sec=1 --countdown-sec=1 --round-sec=8 --results-sec=2 --report-at=34
     sleep 2
     run traveler 33 --connect=127.0.0.1:"$PORT" --nickname=Traveler --bot=objective --bot-portal=obstacle_race
     ;;
@@ -123,6 +146,7 @@ case "$SCENARIO" in
 esac
 
 wait "${PIDS[@]}"
+[ -n "${GW_PID:-}" ] && kill "$GW_PID" 2>/dev/null && sleep 1
 [ -n "$MOCK_PID" ] && curl -s "http://127.0.0.1:$MOCK_PORT/stats" > "$OUT/mock_stats.json" 2>/dev/null; [ -n "$MOCK_PID" ] && kill "$MOCK_PID" 2>/dev/null
 echo "logs in $OUT"
 node "$ROOT/tests/integration/check_results.js" "$SCENARIO" "$OUT"

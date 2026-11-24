@@ -98,7 +98,8 @@ func _connect() -> void:
 		status_changed.emit("접속 실패: %s" % error_string(err))
 		session_ended.emit("connect_error")
 		return
-	status_changed.emit("서버 접속 중... %s:%d (%d/%d)" % [address, port, _attempts, MAX_CONNECT_ATTEMPTS])
+	var shown := address if Net.is_ws_url(address) else "%s:%d" % [address, port]
+	status_changed.emit("서버 접속 중... %s (%d/%d)" % [shown, _attempts, MAX_CONNECT_ATTEMPTS])
 
 
 func _on_connected() -> void:
@@ -432,16 +433,26 @@ func on_notice(text: Variant) -> void:
 
 ## 서버가 다른 서버로 보냄 (로비 → 미니게임 → 로비). 같은 로그인 토큰으로 새 서버에 다시 접속.
 func on_transfer(route: Variant, target: Variant) -> void:
-	var parts := str(route).split(":")
-	if parts.size() != 2 or not parts[1].is_valid_int():
-		return
+	var r := str(route)
+	var new_addr := ""
+	var new_port := 0
+	if r.begins_with("/") and Net.is_ws_url(address):
+		new_addr = Net.ws_base(address) + r  # 같은 게이트웨이의 다른 경로
+	elif Net.is_ws_url(r):
+		new_addr = r
+	else:
+		var parts := r.split(":")
+		if parts.size() != 2 or not parts[1].is_valid_int():
+			return
+		new_addr = parts[0] if parts[0] != "" else address  # ":7781" → 같은 서버 주소, 다른 포트
+		new_port = int(parts[1])
 	transfers.append(str(target))
 	print("[CLIENT %d] transfer -> %s (%s)" % [my_id, route, target])
 	status_changed.emit("이동 중... (%s)" % target)
 	_reset_world()
 	Net.stop()
-	address = parts[0]
-	port = int(parts[1])
+	address = new_addr
+	port = new_port
 	_attempts = 0
 	get_tree().create_timer(0.2).timeout.connect(_connect)
 

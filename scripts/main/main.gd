@@ -44,8 +44,8 @@ func _ready() -> void:
 			print("CLIENT_RESULT " + JSON.stringify({"welcomed": false, "rejected": "login_failed"}))
 			get_tree().quit(1)
 			return
-		var hp := str(args["connect"]).split(":")
-		_start_client(hp[0], int(hp[1]) if hp.size() > 1 else NetConfig.DEFAULT_PORT, false)
+		var hp: Array = Net.parse_address(str(args["connect"]))
+		_start_client(hp[0], hp[1], false)
 	elif args.has("offline"):
 		_start_client("", 0, true)
 	else:
@@ -87,6 +87,7 @@ func _start_server() -> void:
 	server.mode_id = mode_id
 	server.port = int(args.get("port", info.get("port", NetConfig.DEFAULT_PORT)))
 	server.max_players = clampi(int(args.get("max-players", info.get("max_players", NetConfig.DEFAULT_MAX_PLAYERS))), 1, 32)
+	server.transport = "ws" if str(args.get("transport", "enet")) == "ws" else "enet"
 	server.mode_cfg = _mode_cfg_from_args()
 	var mode := str(args.get("auth", ""))
 	if mode == "":
@@ -184,9 +185,9 @@ func _build_menu() -> void:
 	menu.join_requested.connect(func(nick: String, addr: String) -> void:
 		args["nickname"] = nick
 		await _save_profile_from_menu()
-		var hp := addr.split(":")
+		var hp: Array = Net.parse_address(addr)
 		_close_menu()
-		_start_client(hp[0], int(hp[1]) if hp.size() > 1 else NetConfig.DEFAULT_PORT, false))
+		_start_client(hp[0], hp[1], false))
 	menu.host_requested.connect(func(nick: String) -> void:
 		args["nickname"] = nick
 		await _save_profile_from_menu()
@@ -217,7 +218,7 @@ func _spawn_local_server() -> void:
 		if mode_id == "lobby":
 			c.append("--routes=auto")
 		else:
-			c.append("--lobby=127.0.0.1:%d" % NetConfig.DEFAULT_PORT)
+			c.append("--lobby=:%d" % NetConfig.DEFAULT_PORT)
 		_local_server_pids.append(OS.create_process(exe, c))
 	print("[MAIN] spawned local servers: %s" % [_local_server_pids])
 
@@ -262,7 +263,7 @@ func _notification(what: int) -> void:
 		_local_server_pids.clear()
 
 
-## 모드 설정 인자: --routes=auto|mode=host:port,... --lobby=host:port --min-players= --wait-sec= --countdown-sec= --round-sec= --results-sec=
+## 모드 설정 인자: --transport=enet|ws --routes=auto|gateway|mode=host:port,... --lobby=host:port --min-players= --wait-sec= --countdown-sec= --round-sec= --results-sec=
 func _mode_cfg_from_args() -> Dictionary:
 	var cfg := {}
 	for k in ["min-players", "wait-sec", "countdown-sec", "round-sec", "results-sec", "lobby"]:
@@ -273,6 +274,13 @@ func _mode_cfg_from_args() -> Dictionary:
 	var routes_arg := str(args.get("routes", ""))
 	if routes_arg == "auto":
 		cfg["routes"] = ModeRegistry.default_routes()
+	elif routes_arg == "gateway":
+		# 클라우드: 게이트웨이 한 주소 아래 경로로 구분 (wss://서버/obstacle_race). 클라이언트가 현재 주소 기준으로 경로만 바꿈
+		var g := {}
+		for id in ModeRegistry.MODES:
+			if id != "lobby":
+				g[id] = "/" + id
+		cfg["routes"] = g
 	elif routes_arg != "":
 		var r := {}
 		for pair in routes_arg.split(","):

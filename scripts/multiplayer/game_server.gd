@@ -39,6 +39,8 @@ class ServerPlayer:
 
 
 var port := NetConfig.DEFAULT_PORT
+## "enet" | "ws" (--transport=ws)
+var transport := "enet"
 var max_players := NetConfig.DEFAULT_MAX_PLAYERS
 var map_id := "lobby_plaza"
 ## 게임 모드 (lobby / obstacle_race / survival / racing / coop / party)
@@ -98,7 +100,7 @@ func start() -> bool:
 	else:
 		push_warning("[SERVER] DEV AUTH MODE — tokens are NOT verified. Never use in production.")
 
-	var err := Net.start_server(port, max_players + NetConfig.EXTRA_CONNECTION_SLOTS)
+	var err := Net.start_server(port, max_players + NetConfig.EXTRA_CONNECTION_SLOTS, transport)
 	if err != OK:
 		push_error("[SERVER] failed to listen on %d: %s" % [port, error_string(err)])
 		return false
@@ -106,7 +108,7 @@ func start() -> bool:
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 	Engine.max_fps = 120  # 헤드리스에서 CPU 과점유 방지
-	print("[SERVER] listening on port %d | mode=%s map=%s | max_players=%d | auth=%s" % [port, mode_id, map_id, max_players, auth_mode])
+	print("[SERVER] listening on port %d (%s) | mode=%s map=%s | max_players=%d | auth=%s" % [port, transport, mode_id, map_id, max_players, auth_mode])
 	return true
 
 

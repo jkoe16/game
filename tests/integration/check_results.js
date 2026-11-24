@@ -24,7 +24,7 @@ function scriptErrors(name) {
   return fs.readFileSync(file, "utf8").split(/\r?\n/).filter(l => /SCRIPT ERROR|Parse Error|Invalid call|Invalid access/.test(l));
 }
 
-const NO_MAIN_SERVER = ["authflow", "minigames", "touch", "offline"].includes(scenario);
+const NO_MAIN_SERVER = ["authflow", "minigames", "touch", "offline", "gateway"].includes(scenario);
 const server = NO_MAIN_SERVER ? { players: [], stats: {} } : result("server", "SERVER_RESULT");
 if (!NO_MAIN_SERVER) check(server !== null, "server produced a report");
 if (!server) process.exit(1);
@@ -37,7 +37,7 @@ const byNick = Object.fromEntries(server.players.map(p => [p.nickname, p]));
 
 function dist(a, b) { return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]); }
 
-if (scenario === "basic") {
+if (scenario === "basic" || scenario === "ws") {
   const w1 = result("walker1", "CLIENT_RESULT");
   const w2 = result("walker2", "CLIENT_RESULT");
   check(w1 && w1.welcomed && w2 && w2.welcomed, "two clients joined");
@@ -150,6 +150,19 @@ if (scenario === "portal") {
   check(race && race.rounds >= 1, "race server completed a round with the transferred player", race && `rounds=${race.rounds}`);
   const lobbyLog = fs.readFileSync(path.join(dir, "server.log"), "utf8");
   check((lobbyLog.match(/joined as 'Traveler'/g) || []).length >= 2, "player re-joined the lobby after the round");
+}
+
+if (scenario === "gateway") {
+  const c = result("traveler", "CLIENT_RESULT");
+  check(c && c.welcomed !== undefined, "client connected through the gateway", c && JSON.stringify(c).slice(0, 80));
+  check(c && c.transfers.includes("obstacle_race"), "lobby portal moved the player to the race server via gateway path", c && JSON.stringify(c.transfers));
+  check(c && c.transfers.includes("round_over"), "after results the player returned to the lobby via gateway path", c && JSON.stringify(c.transfers));
+  const gw = fs.readFileSync(path.join(dir, "gateway.txt"), "utf8");
+  check(gw.includes("GATEWAY_READY"), "gateway started");
+  check((gw.match(/\[lobby\].*joined as 'Traveler'/g) || []).length >= 2, "player re-joined the lobby after the round");
+  check((gw.match(/\[obstacle_race\].*joined as 'Traveler'/g) || []).length >= 1, "player joined the race server");
+  const errs = gw.split(/\r?\n/).filter(l => /SCRIPT ERROR|Parse Error/.test(l));
+  check(errs.length === 0, "no script errors in gateway-managed servers", errs.slice(0, 3).join(" | "));
 }
 
 if (scenario === "offline") {

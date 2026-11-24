@@ -97,6 +97,12 @@ func apply_mode_state(state: Dictionary) -> void:
 			var c: Array = _coin_data[i]
 			node.position = Vector3(c[0], c[1], c[2])
 			node.visible = int(c[3]) == 1
+			# 등급별 모양: 금화 1 · 보석 3(하늘색, 크게) · 황금 별 5(가장 크고 밝게)
+			var v := int(c[4]) if c.size() > 4 else 1
+			if node.get_meta("value", 0) != v:
+				node.set_meta("value", v)
+				node.scale = Vector3.ONE * (1.0 if v == 1 else (1.5 if v == 3 else 2.2))
+				node.material_override = glow_material(Color(1.0, 0.8, 0.25) if v == 1 else (Color(0.45, 0.85, 1.0) if v == 3 else Color(1.0, 0.95, 0.4)), 1.15 if v == 1 else 1.8)
 		else:
 			node.visible = false
 

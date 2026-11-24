@@ -1,7 +1,14 @@
 class_name ObstacleRaceMode
 extends GameMode
 ## 장애물 레이스: 회전 막대·이동 발판·점프 패드 코스를 지나 결승선 통과 순서로 순위.
-## 떨어지면 마지막 체크포인트에서 재출발. 전원 완주 또는 시간 종료 시 끝.
+## 떨어지면 마지막 체크포인트에서 재출발(벌칙 없음). 첫 완주 후 25초 안에 들어와야 완주 인정.
+
+const FINISH_WINDOW := 25
+
+
+func _init() -> void:
+	round_ticks = 150 * 60
+
 
 func mode_id() -> String:
 	return "obstacle_race"
@@ -10,7 +17,7 @@ func title() -> String:
 	return "장애물 레이스"
 
 func rules_text() -> String:
-	return "막대를 피하고 결승선까지 달려요! 떨어지면 체크포인트에서 다시 시작"
+	return "막대를 점프로 넘고 결승선까지! 떨어져도 체크포인트에서 다시 시작해요"
 
 
 func _init_entry(e: Dictionary) -> void:
@@ -25,13 +32,24 @@ func _mode_tick() -> void:
 		if e["status"] != "playing":
 			continue
 		var pos: Vector3 = server.get_player_pos(e["peer_id"])
-		e["checkpoint"] = maxi(e["checkpoint"], m.checkpoint_index_at(pos))
+		var cp := m.checkpoint_index_at(pos)
+		if cp > e["checkpoint"]:
+			e["checkpoint"] = cp
+			server.notify_player(e["peer_id"], "!체크포인트 %d/%d" % [cp, m.checkpoints.size() - 1])
 		e["progress"] = maxf(e["progress"], clampf(pos.z / m.finish_z, 0.0, 1.0))
 		if m.is_finished(pos):
 			e["status"] = "finished"
 			e["finish_tick"] = tick - round_start_tick
 			e["progress"] = 1.0
 			dirty = true
+			if _finished_count() == 1:
+				start_finish_timer(FINISH_WINDOW)
+			else:
+				server.notify_player(e["peer_id"], "!완주! %d등" % _finished_count())
+
+
+func _finished_count() -> int:
+	return entries.values().filter(func(e: Dictionary) -> bool: return e["status"] == "finished").size()
 
 
 func _is_over() -> bool:
@@ -63,5 +81,6 @@ func _score_text(e: Dictionary) -> String:
 	return "진행 %d%%" % int(e["progress"] * 100)
 
 
-func _is_win(e: Dictionary, rank: int) -> bool:
-	return rank == 1 and e["status"] == "finished"
+## 완주자는 모두 승리 보너스 (1등만이 아니라 "결승선까지 간 것"을 보상)
+func _is_win(e: Dictionary, _rank: int) -> bool:
+	return e["status"] == "finished"

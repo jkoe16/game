@@ -10,6 +10,11 @@ var required := 1
 var hold := 0
 var occupied: Array = []
 var success := false
+var _clear_tick := 0
+
+
+func _init() -> void:
+	round_ticks = 180 * 60
 
 
 func mode_id() -> String:
@@ -19,13 +24,14 @@ func title() -> String:
 	return "협동 미션"
 
 func rules_text() -> String:
-	return "다 같이 발판을 밟아 문을 열어요! (필요 인원만큼 동시에)"
+	return "주황 발판 %d개를 동시에 밟고 1초 버티면 문이 열려요! 문 3개를 열면 성공" % required
 
 
 func _on_round_start() -> void:
 	stage = 0
 	hold = 0
 	success = false
+	_clear_tick = 0
 	required = clampi(playing_entries().size(), 1, 4)
 	var m := map as CoopRoomsMap
 	for i in m.gates.size():
@@ -40,6 +46,11 @@ func _mode_tick() -> void:
 	var m := map as CoopRoomsMap
 	if stage >= m.stage_plates.size():
 		return
+	# 중간에 나간 사람이 있어도 막히지 않게 필요 인원을 매 틱 다시 계산
+	var need := clampi(entries.values().filter(func(e: Dictionary) -> bool: return e["status"] == "playing").size(), 1, 4)
+	if need != required:
+		required = need
+		dirty = true
 	var plates: Array = m.stage_plates[stage]
 	var occ: Array = []
 	for p in plates:
@@ -57,7 +68,8 @@ func _mode_tick() -> void:
 		dirty = true
 	var count := occ.count(true)
 	hold = hold + 1 if count >= required else 0
-	if hold >= HOLD_TICKS:
+	# 방이 깊어질수록 조금 더 오래 버텨야 한다 (1초 → 1.5초 → 2초)
+	if hold >= HOLD_TICKS + stage * 30:
 		m.set_gate_open(stage, true)
 		stage += 1
 		hold = 0
@@ -67,6 +79,9 @@ func _mode_tick() -> void:
 				e["score"] = stage
 		if stage >= m.stage_plates.size():
 			success = true
+			_clear_tick = tick - round_start_tick
+		else:
+			announce("%d번 문 열림! 다음 방으로" % stage)
 		dirty = true
 
 
@@ -83,7 +98,7 @@ func _ranked() -> Array:
 
 
 func _score_text(_e: Dictionary) -> String:
-	return "성공!" if success else "%d/3 단계" % stage
+	return ("성공! %.0f초" % (_clear_tick / 60.0)) if success else "%d/3 단계" % stage
 
 
 func _is_win(_e: Dictionary, _rank: int) -> bool:

@@ -21,6 +21,8 @@ var gates: Array[Node3D] = []          # 모드가 여닫는 벽
 var round_start_tick := 0
 
 const PLAYER_RADIUS := 0.45
+## 가속 회전 막대의 최고 각속도 (라디안/초 ≈ 160°/s). 이보다 빨라지지 않는다
+const MAX_SWEEP_OMEGA := 2.8
 const PLAYER_HEIGHT := 1.6
 
 static var _material_cache := {}
@@ -567,8 +569,15 @@ func add_sweeper(center: Vector3, radius: float, bar_y: float, omega_deg: float,
 
 func sweeper_angle(s: Dictionary, tick: int) -> float:
 	if s["accel"] != 0.0:
+		# 가속하다가 최고 속도(MAX_SWEEP_OMEGA)에서 멈춘다 → 끝없이 빨라져 피할 수 없게 되는 일 방지
 		var t := maxf(0.0, float(tick - round_start_tick)) / 60.0
-		return s["phase"] + s["omega"] * t + 0.5 * s["accel"] * t * t
+		var w0: float = s["omega"]
+		var acc: float = s["accel"]
+		var cap := MAX_SWEEP_OMEGA * signf(acc)
+		var t_cap := maxf(0.0, (cap - w0) / acc)
+		if t <= t_cap:
+			return s["phase"] + w0 * t + 0.5 * acc * t * t
+		return s["phase"] + w0 * t_cap + 0.5 * acc * t_cap * t_cap + cap * (t - t_cap)
 	return s["phase"] + s["omega"] * float(tick) / 60.0
 
 

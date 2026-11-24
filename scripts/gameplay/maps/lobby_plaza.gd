@@ -15,10 +15,10 @@ const WOOD := Color(0.78, 0.55, 0.4)
 
 const MODE_PORTALS := [
 	["장애물 레이스", Color(1.0, 0.5, 0.45), "obstacle_race"],
-	["생존 게임", Color(0.62, 0.52, 1.0), "survival"],
+	["최후의 생존자", Color(0.62, 0.52, 1.0), "survival"],
 	["레이싱", Color(1.0, 0.78, 0.25), "racing"],
 	["협동 미션", Color(0.3, 0.85, 0.72), "coop"],
-	["파티 미니게임", Color(1.0, 0.52, 0.82), "party"],
+	["보물 수집", Color(1.0, 0.52, 0.82), "party"],
 ]
 const PORTAL_SHADER := preload("res://shaders/portal_swirl.gdshader")
 

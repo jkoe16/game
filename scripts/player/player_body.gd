@@ -14,12 +14,15 @@ const GRAVITY := 26.0
 const MAX_FALL_SPEED := 40.0
 const JUMP_VELOCITY := 10.0
 const COYOTE_TIME := 0.1
+## 착지 직전에 누른 점프도 인정 (0.12초): 처음 하는 사람도 점프 타이밍이 덜 억울하다
+const JUMP_BUFFER := 0.12
 const TURN_SPEED := 14.0
 const STEP_HEIGHT := 0.35
 const BOOST_MULT := 1.6
 
 var peer_id := 0
 var air_time := 0.0
+var jump_buffer := 0.0
 var facing_yaw := 0.0
 ## 넘어짐(넉백) 남은 시간: 이 동안 조작 불가
 var stun_time := 0.0
@@ -47,10 +50,14 @@ func simulate(input: PlayerInput, delta: float, world_tick := 0) -> void:
 		world.pre_move(self, world_tick)
 
 	var move := input.get_move()
-	var want_jump := input.jump
+	if input.jump:
+		jump_buffer = JUMP_BUFFER
+	var want_jump := jump_buffer > 0.0
+	jump_buffer = maxf(jump_buffer - delta, 0.0)
 	if frozen or stun_time > 0.0:
 		move = Vector2.ZERO
 		want_jump = false
+		jump_buffer = 0.0
 	stun_time = maxf(stun_time - delta, 0.0)
 	boost_time = maxf(boost_time - delta, 0.0)
 	var on_floor := is_on_floor()
@@ -81,6 +88,7 @@ func simulate(input: PlayerInput, delta: float, world_tick := 0) -> void:
 	if want_jump and air_time <= COYOTE_TIME:
 		vy = JUMP_VELOCITY
 		air_time = COYOTE_TIME + 0.001  # 코요테 구간 소진 → 공중 2단 점프 불가
+		jump_buffer = 0.0
 
 	if move.length_squared() > 0.0004:
 		facing_yaw = lerp_angle(facing_yaw, atan2(move.x, move.y), 1.0 - exp(-TURN_SPEED * delta))

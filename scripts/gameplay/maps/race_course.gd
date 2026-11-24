@@ -25,7 +25,7 @@ var waypoints: Array[Vector3] = [
 
 func _ready() -> void:
 	map_id = "race_course"
-	display_name = "장애물 레이스 코스"
+	display_name = "하늘 놀이공원 코스"
 	kill_height = -15.0
 	setup_environment(Color(0.4, 0.65, 0.98), Color(0.9, 0.95, 1.0), Vector3(-55, 25, 0))
 
@@ -89,6 +89,82 @@ func _decorate() -> void:
 		add_flowers(Vector3(5.8 * sx, 0, -4.5), 0.9, 14, 40 + fi)
 		add_bush(Vector3(6.0 * sx, 0, 3.5), 0.7)
 		add_flowers(Vector3(5.8 * sx, 3.5, 120.0), 0.9, 12, 60 + fi)
+	_build_ferris_wheel(Vector3(-30, -2, 62))
+	_build_carousel(Vector3(22, -3, 30))
+	# 코스 옆 떠 있는 작은 섬 위 줄무늬 천막
+	var tent_cols := [Color(1.0, 0.5, 0.6), Color(0.5, 0.7, 1.0), Color(1.0, 0.8, 0.35), Color(0.65, 0.9, 0.55)]
+	for i in 4:
+		var p := Vector3(-17.0 if i % 2 == 0 else 17.0, -2.5, 12.0 + i * 26.0)
+		add_mesh(cyl_mesh(3.2, 3.2, 1.0, 24), p, Color(0.55, 0.85, 0.5))
+		add_island_underside(p + Vector3(0, -0.5, 0), 3.1, 4.0)
+		_build_tent(p + Vector3(0, 0.5, 0), tent_cols[i])
+
+
+var _spin: Array[Dictionary] = []   # 도는 놀이기구 {node, speed}
+
+
+func _process(delta: float) -> void:
+	for s in _spin:
+		(s["node"] as Node3D).rotate_object_local(s["axis"], s["speed"] * delta)
+
+
+## 대관람차 (천천히 돈다, 시각 전용)
+func _build_ferris_wheel(pos: Vector3) -> void:
+	add_mesh(cyl_mesh(5.0, 6.0, 1.5, 24), pos + Vector3(0, -0.75, 0), Color(0.55, 0.85, 0.5))
+	add_island_underside(pos + Vector3(0, -1.5, 0), 5.8, 7.0)
+	for sz in [-1.0, 1.0]:
+		add_mesh(cyl_mesh(0.35, 0.5, 13.0, 10), pos + Vector3(-3.0, 6.0, sz * 1.0), Color(0.95, 0.95, 1.0), Vector3(0, 0, -14))
+		add_mesh(cyl_mesh(0.35, 0.5, 13.0, 10), pos + Vector3(3.0, 6.0, sz * 1.0), Color(0.95, 0.95, 1.0), Vector3(0, 0, 14))
+	var wheel := Node3D.new()
+	wheel.position = pos + Vector3(0, 12.0, 0)
+	wheel.set_meta("dynamic", true)
+	add_child(wheel)
+	var rim := TorusMesh.new()
+	rim.inner_radius = 9.4
+	rim.outer_radius = 10.0
+	rim.rings = 48
+	rim.ring_segments = 8
+	add_mesh(rim, Vector3.ZERO, Color(1.0, 0.55, 0.7), Vector3(90, 0, 0), Vector3.ONE, wheel)
+	add_mesh(sphere_mesh(1.0, 14), Vector3.ZERO, Color(1.0, 0.85, 0.35), Vector3.ZERO, Vector3.ONE, wheel)
+	var cols := [Color(1.0, 0.55, 0.6), Color(0.5, 0.75, 1.0), Color(1.0, 0.82, 0.35), Color(0.6, 0.9, 0.55), Color(0.8, 0.65, 1.0)]
+	for k in 10:
+		var a := TAU * k / 10.0
+		add_mesh(cyl_mesh(0.12, 0.12, 9.6, 6), Vector3(cos(a), sin(a), 0) * 4.8, Color(1, 1, 1), Vector3(0, 0, rad_to_deg(a) - 90.0), Vector3.ONE, wheel)
+		add_mesh(BoxMesh.new(), Vector3(cos(a), sin(a), 0) * 9.7, cols[k % 5], Vector3.ZERO, Vector3(1.4, 1.2, 1.4), wheel)
+	_spin.append({"node": wheel, "axis": Vector3.FORWARD, "speed": 0.15})
+
+
+## 회전목마 (시각 전용)
+func _build_carousel(pos: Vector3) -> void:
+	add_mesh(cyl_mesh(5.5, 5.5, 1.2, 32), pos, Color(0.55, 0.85, 0.5))
+	add_island_underside(pos + Vector3(0, -0.6, 0), 5.4, 6.0)
+	var spin := Node3D.new()
+	spin.position = pos + Vector3(0, 0.6, 0)
+	spin.set_meta("dynamic", true)
+	add_child(spin)
+	add_mesh(cyl_mesh(4.0, 4.2, 0.5, 32), Vector3(0, 0.25, 0), Color(1.0, 0.92, 0.75), Vector3.ZERO, Vector3.ONE, spin)
+	add_mesh(cyl_mesh(0.4, 0.4, 4.5, 12), Vector3(0, 2.5, 0), Color(1.0, 0.85, 0.4), Vector3.ZERO, Vector3.ONE, spin)
+	for k in 8:  # 줄무늬 지붕
+		var a := TAU * k / 8.0
+		add_mesh(cyl_mesh(0.0, 2.2, 1.6, 3), Vector3(sin(a) * 2.2, 5.3, cos(a) * 2.2), Color(1.0, 0.5, 0.65) if k % 2 == 0 else Color(1, 1, 1), Vector3(0, rad_to_deg(a), 0), Vector3(1, 1, 0.9), spin)
+	add_mesh(cyl_mesh(0.05, 4.3, 1.8, 24), Vector3(0, 5.4, 0), Color(1.0, 0.6, 0.75), Vector3.ZERO, Vector3.ONE, spin)
+	var cols := [Color(1.0, 0.7, 0.8), Color(0.7, 0.85, 1.0), Color(1.0, 0.9, 0.6), Color(0.75, 0.95, 0.7)]
+	for k in 6:
+		var a := TAU * k / 6.0
+		var p := Vector3(sin(a) * 3.0, 0, cos(a) * 3.0)
+		add_mesh(cyl_mesh(0.06, 0.06, 3.8, 6), p + Vector3(0, 2.4, 0), Color(1.0, 0.85, 0.4), Vector3.ZERO, Vector3.ONE, spin)
+		add_mesh(sphere_mesh(0.55, 12), p + Vector3(0, 1.4, 0), cols[k % 4], Vector3.ZERO, Vector3(0.7, 0.8, 1.4), spin)
+	_spin.append({"node": spin, "axis": Vector3.UP, "speed": 0.5})
+
+
+## 줄무늬 천막
+func _build_tent(pos: Vector3, c: Color) -> void:
+	add_mesh(cyl_mesh(1.8, 1.8, 1.8, 16), pos + Vector3(0, 0.9, 0), Color(1, 1, 1))
+	for k in 8:
+		var a := TAU * k / 8.0
+		add_mesh(cyl_mesh(0.0, 1.35, 1.7, 3), pos + Vector3(sin(a) * 0.95, 2.6, cos(a) * 0.95), c if k % 2 == 0 else Color(1, 1, 1), Vector3(0, rad_to_deg(a), 0))
+	add_mesh(sphere_mesh(0.2, 8), pos + Vector3(0, 3.55, 0), Color(1.0, 0.85, 0.35))
+	add_flag(pos + Vector3(0, 3.5, 0), c, 0.0, 1.0)
 
 
 func get_start_point(index: int) -> Vector3:

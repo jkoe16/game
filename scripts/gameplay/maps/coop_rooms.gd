@@ -14,14 +14,14 @@ var _plate_meshes: Array = []     # [stage] -> Array[MeshInstance3D] (클라이�
 
 func _ready() -> void:
 	map_id = "coop_rooms"
-	display_name = "협동 미션: 비밀의 방"
+	display_name = "협동 미션: 하늘 신전"
 	kill_height = -10.0
 	setup_environment(Color(0.45, 0.7, 0.9), Color(0.95, 0.95, 0.85), Vector3(-65, 20, 0))
 	var floor_len := ROOM_LEN * 4.0
 	add_box(Vector3(0, -0.5, floor_len * 0.5 - 10.0), Vector3(16, 1, floor_len), Color(0.9, 0.85, 0.7))
 	for side in [-1.0, 1.0]:
-		add_box(Vector3(8.5 * side, 2, floor_len * 0.5 - 10.0), Vector3(1, 4, floor_len), Color(0.7, 0.75, 0.85))
-	add_box(Vector3(0, 2, -10.5), Vector3(18, 4, 1), Color(0.7, 0.75, 0.85))
+		add_box(Vector3(8.5 * side, 2, floor_len * 0.5 - 10.0), Vector3(1, 4, floor_len), Color(0.9, 0.8, 0.65))
+	add_box(Vector3(0, 2, -10.5), Vector3(18, 4, 1), Color(0.9, 0.8, 0.65))
 
 	for s in 3:
 		var cz := s * ROOM_LEN
@@ -69,8 +69,12 @@ func _decorate() -> void:
 			for pz in [cz - 7.0, cz + 7.0]:
 				add_mesh(cyl_mesh(0.42, 0.32, 0.6, 12), Vector3(6.9 * sx, 0.3, pz), Color(0.9, 0.6, 0.45))
 				add_bush(Vector3(6.9 * sx, 0.5, pz), 0.55)
-			add_mesh(sphere_mesh(0.28, 12), Vector3(7.85 * sx, 3.0, cz), glow_material(Color(1.0, 0.88, 0.6), 1.6))
-			add_mesh(cyl_mesh(0.3, 0.3, 0.12, 12), Vector3(7.95 * sx, 3.0, cz), Color(0.6, 0.55, 0.75), Vector3(0, 0, 90))
+			# 벽 횃불 + 기둥
+			add_mesh(cyl_mesh(0.08, 0.06, 0.7, 8), Vector3(7.75 * sx, 2.6, cz), Color(0.5, 0.35, 0.28), Vector3(0, 0, -20 * sx))
+			add_mesh(sphere_mesh(0.22, 10), Vector3(7.62 * sx, 3.0, cz), glow_material(Color(1.0, 0.65, 0.3), 2.2), Vector3.ZERO, Vector3(1, 1.5, 1))
+			for pz in [cz - 9.5, cz + 9.5]:
+				add_mesh(cyl_mesh(0.42, 0.48, 4.0, 14), Vector3(7.6 * sx, 2.0, pz), Color(0.95, 0.88, 0.75))
+				add_mesh(BoxMesh.new(), Vector3(7.6 * sx, 4.05, pz), Color(0.98, 0.92, 0.8), Vector3.ZERO, Vector3(1.1, 0.25, 1.1))
 	var cap := BoxMesh.new()
 	cap.size = Vector3(1.3, 0.25, floor_len)
 	for sx in [-1.0, 1.0]:

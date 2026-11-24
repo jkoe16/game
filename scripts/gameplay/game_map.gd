@@ -544,22 +544,41 @@ func add_sweeper(center: Vector3, radius: float, bar_y: float, omega_deg: float,
 	pivot.position = Vector3(center.x, bar_y, center.z)
 	add_child(pivot)
 	if not is_headless:
+		# 사탕 막대: 둥근 막대 + 흰 줄무늬 + 끝 구슬 (판정은 sweeper_hit 계산식이라 모양과 무관)
+		var length := radius * (2.0 if arms == 2 else 1.0)
+		var z0 := 0.0 if arms == 2 else radius * 0.5
+		var r := thickness * 0.55
 		var bar := MeshInstance3D.new()
-		var mesh := BoxMesh.new()
-		mesh.size = Vector3(thickness, thickness, radius * (2.0 if arms == 2 else 1.0))
-		bar.mesh = mesh
+		bar.mesh = cyl_mesh(r, r, length, 14)
 		bar.material_override = toon_material(color)
-		bar.position = Vector3(0, 0, 0.0 if arms == 2 else radius * 0.5)
+		bar.rotation_degrees.x = 90
+		bar.position = Vector3(0, 0, z0)
 		pivot.add_child(bar)
+		var stripe := cyl_mesh(r * 1.06, r * 1.06, 0.28, 14)
+		var n := int(length / 0.9)
+		for i in n:
+			var sm := MeshInstance3D.new()
+			sm.mesh = stripe
+			sm.material_override = toon_material(Color(1, 1, 1))
+			sm.rotation_degrees.x = 90
+			sm.position = Vector3(0, 0, z0 - length * 0.5 + (i + 0.5) * length / n)
+			pivot.add_child(sm)
+		for end_z in ([-radius, radius] if arms == 2 else [radius]):
+			var cap := MeshInstance3D.new()
+			cap.mesh = sphere_mesh(r * 1.7, 14)
+			cap.material_override = toon_material(color.lightened(0.25))
+			cap.position = Vector3(0, 0, end_z)
+			pivot.add_child(cap)
 		var hub := MeshInstance3D.new()
-		var hm := CylinderMesh.new()
-		hm.top_radius = 0.5
-		hm.bottom_radius = 0.6
-		hm.height = bar_y - center.y + 0.4
-		hub.mesh = hm
+		hub.mesh = cyl_mesh(0.5, 0.65, bar_y - center.y + 0.4, 18)
 		hub.material_override = toon_material(Color(0.95, 0.85, 0.3))
 		hub.position = Vector3(0, -(bar_y - center.y) * 0.5 + 0.2, 0)
 		pivot.add_child(hub)
+		var top := MeshInstance3D.new()
+		top.mesh = sphere_mesh(0.62, 16)
+		top.material_override = toon_material(Color(1.0, 0.6, 0.7))
+		top.position = Vector3(0, 0.35, 0)
+		pivot.add_child(top)
 	sweepers.append({
 		"center": center, "radius": radius, "y": bar_y, "omega": deg_to_rad(omega_deg),
 		"phase": deg_to_rad(phase_deg), "accel": deg_to_rad(accel_deg), "arms": arms,

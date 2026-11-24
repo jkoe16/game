@@ -3,6 +3,9 @@ extends GameMap
 ## 코인 모으기 경기장: 30×30 바닥 + 울타리 + 높이가 다른 발판 2개(경사로로 연결). 코인은 서버가 배치.
 
 const HALF := 15.0
+## 바위 (x, 높이, z) — 낮은 발판 뒤 구석에 모여 동굴 입구처럼
+const ROCKS := [Vector3(-12.6, 3.2, -12.6), Vector3(-12.6, 2.4, -9.4), Vector3(-9.4, 2.4, -12.6), Vector3(12.6, 2.0, -12.6)]
+const PALMS := [Vector3(12.5, 0, 12.5), Vector3(-12.5, 0, 12.5), Vector3(12.8, 0, -9.0)]
 var platforms: Array[Dictionary] = [
 	{"center": Vector3(-7, 0, -7), "half": Vector3(3, 0, 3), "top": 1.6},
 	{"center": Vector3(7, 0, 7), "half": Vector3(3, 0, 3), "top": 3.0},
@@ -13,10 +16,15 @@ var _coin_data: Array = []
 
 func _ready() -> void:
 	map_id = "coin_arena"
-	display_name = "코인 광장"
+	display_name = "보물섬"
 	kill_height = -10.0
 	setup_environment(Color(0.4, 0.62, 0.95), Color(1.0, 0.92, 0.75), Vector3(-50, -20, 0))
-	add_box(Vector3(0, -0.5, 0), Vector3(HALF * 2, 1, HALF * 2), Color(0.6, 0.85, 0.55))
+	add_box(Vector3(0, -0.5, 0), Vector3(HALF * 2, 1, HALF * 2), Color(0.98, 0.87, 0.6))  # 모래사장
+	# 동굴 바위 (충돌 있음, 코인은 이 근처에 생기지 않음)
+	for r in ROCKS:
+		add_cylinder(Vector3(r.x, r.y * 0.5, r.z), r.y * 0.5, r.y, Color(0.66, 0.58, 0.55), true, 14)
+	for p in PALMS:
+		add_box(p + Vector3(0, 2.5, 0), Vector3(0.6, 5.0, 0.6), Color.WHITE, Vector3.ZERO, true, false)  # 야자수 줄기 충돌 (모양은 _decorate)
 	for side in [-1.0, 1.0]:
 		add_box(Vector3(HALF * side, 0.5, 0), Vector3(0.6, 1, HALF * 2), Color(1, 0.95, 0.85))
 		add_box(Vector3(0, 0.5, HALF * side), Vector3(HALF * 2, 1, 0.6), Color(1, 0.95, 0.85))
@@ -35,10 +43,31 @@ func _ready() -> void:
 func _decorate() -> void:
 	if is_headless:
 		return
-	var stripe := BoxMesh.new()
-	stripe.size = Vector3(3.0, 0.02, HALF * 2 - 1.0)
+	# 바다 + 모래 물결 무늬
+	var sea := StandardMaterial3D.new()
+	sea.albedo_color = Color(0.35, 0.75, 0.95, 0.8)
+	sea.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	sea.roughness = 0.15
+	add_mesh(cyl_mesh(40.0, 40.0, 0.2, 48), Vector3(0, -2.6, 0), sea)
+	add_mesh(cyl_mesh(23.0, 24.0, 0.6, 48), Vector3(0, -2.3, 0), Color(0.98, 0.9, 0.68))
+	var ripple := BoxMesh.new()
+	ripple.size = Vector3(2.0, 0.02, HALF * 2 - 1.0)
 	for i in 5:
-		add_mesh(stripe, Vector3(-12.0 + i * 6.0, 0.01, 0), Color(0.68, 0.9, 0.6))
+		add_mesh(ripple, Vector3(-12.0 + i * 6.0, 0.01, 0), Color(0.99, 0.92, 0.72))
+	for p in PALMS:
+		_palm(p)
+	for r in ROCKS:  # 바위 위 덩굴과 작은 돌
+		add_mesh(sphere_mesh(r.y * 0.45, 12), Vector3(r.x, r.y, r.z), Color(0.72, 0.64, 0.6), Vector3.ZERO, Vector3(1, 0.6, 1))
+		add_bush(Vector3(r.x + 0.6, r.y * 0.85, r.z + 0.4), 0.45, Color(0.35, 0.7, 0.45))
+	# 동굴 아치 + 보물 상자 (낮은 발판 뒤)
+	var arch := TorusMesh.new()
+	arch.inner_radius = 1.9
+	arch.outer_radius = 2.7
+	arch.rings = 24
+	arch.ring_segments = 10
+	add_mesh(arch, Vector3(-11.0, 0.2, -11.0), Color(0.6, 0.52, 0.5), Vector3(90, 45, 0))
+	_chest(Vector3(-11.6, 0, -11.6), 45.0)
+	_chest(Vector3(9.5, 3.0, 9.5), -135.0)
 	var post := BoxMesh.new()
 	post.size = Vector3(0.8, 1.5, 0.8)
 	var cols := [Color(1.0, 0.6, 0.7), Color(0.55, 0.75, 1.0), Color(1.0, 0.82, 0.35), Color(0.6, 0.88, 0.55)]
@@ -53,9 +82,31 @@ func _decorate() -> void:
 		add_edge_trim(Vector3(p["center"].x, top * 0.5, p["center"].z), Vector3(6, top, 6), Color(1, 1, 1))
 	add_mesh(cyl_mesh(2.2, 2.2, 0.03, 32), Vector3(0, 0.02, 0), Color(1.0, 0.86, 0.35))
 	add_mesh(cyl_mesh(1.6, 1.6, 0.035, 32), Vector3(0, 0.03, 0), Color(1.0, 0.95, 0.7))
-	# 발판 아래 꽃 (경기장 밖은 바닥이 없으므로 안쪽 구석에만)
-	for c in [Vector3(-12.5, 0, 12.5), Vector3(12.5, 0, -12.5)]:
-		add_flowers(c, 1.6, 18, int(c.x * 3 + 90))
+
+
+
+func _palm(p: Vector3) -> void:
+	var trunk := Color(0.72, 0.52, 0.36)
+	for k in 5:  # 살짝 휜 줄기
+		add_mesh(cyl_mesh(0.22, 0.28, 0.95, 10), p + Vector3(k * 0.12, 0.5 + k * 0.9, 0), trunk.lightened(0.05 * (k % 2)), Vector3(0, 0, -6.0 * k))
+	var top := p + Vector3(0.6, 4.9, 0)
+	for k in 6:
+		var a := TAU * k / 6.0
+		add_mesh(sphere_mesh(1.0, 10), top + Vector3(cos(a), -0.25, sin(a)) * 1.2, Color(0.35, 0.75, 0.4), Vector3(0, -rad_to_deg(a), -25), Vector3(1.6, 0.18, 0.55))
+	add_mesh(sphere_mesh(0.22, 8), top + Vector3(0.2, -0.35, 0.2), Color(0.55, 0.4, 0.3))
+	add_mesh(sphere_mesh(0.22, 8), top + Vector3(-0.2, -0.38, 0.1), Color(0.55, 0.4, 0.3))
+
+
+func _chest(p: Vector3, yaw: float) -> void:
+	var root := Node3D.new()
+	root.position = p
+	root.rotation_degrees.y = yaw
+	add_child(root)
+	add_mesh(BoxMesh.new(), Vector3(0, 0.35, 0), Color(0.72, 0.45, 0.3), Vector3.ZERO, Vector3(1.2, 0.7, 0.8), root)
+	add_mesh(BoxMesh.new(), Vector3(0, 0.75, -0.3), Color(0.8, 0.52, 0.35), Vector3(-35, 0, 0), Vector3(1.25, 0.12, 0.85), root)
+	add_mesh(BoxMesh.new(), Vector3(0, 0.36, 0.41), Color(1.0, 0.82, 0.3), Vector3.ZERO, Vector3(0.25, 0.3, 0.04), root)
+	for k in 5:
+		add_mesh(cyl_mesh(0.14, 0.14, 0.05, 10), Vector3(-0.35 + k * 0.17, 0.74, 0.05 * (k % 2)), glow_material(Color(1.0, 0.82, 0.3), 1.3), Vector3.ZERO, Vector3.ONE, root)
 
 
 func random_coin_points(rng: RandomNumberGenerator, n: int) -> Array[Vector3]:
@@ -66,6 +117,25 @@ func random_coin_points(rng: RandomNumberGenerator, n: int) -> Array[Vector3]:
 			var d: Vector3 = (p - pl["center"]).abs()
 			if d.x <= 3.0 and d.z <= 3.0:
 				p.y = float(pl["top"]) + 1.0
+				# 발판 가운데는 보석 자리 → 금화는 가장자리 쪽으로
+				var off := Vector2(p.x - pl["center"].x, p.z - pl["center"].z)
+				if off.length() < 1.8:
+					off = (off.normalized() if off.length() > 0.01 else Vector2(1, 1).normalized()) * 2.2
+					p.x = pl["center"].x + off.x
+					p.z = pl["center"].z + off.y
+		# 가운데는 황금 별 자리
+		if Vector2(p.x, p.z).length() < 1.8:
+			p.x = 2.2
+			p.z = 0.0
+		# 바위·야자수 안에 생기지 않게 바깥으로 밀어낸다
+		for r in ROCKS + PALMS:
+			var flat: Vector2 = Vector2(p.x - r.x, p.z - r.z)
+			var keep: float = (r.y * 0.5 if r.y > 0.0 else 0.4) + 1.2
+			if flat.length() < keep:
+				var dir: Vector2 = flat.normalized() if flat.length() > 0.01 else Vector2(1, 1).normalized()
+				var q: Vector2 = Vector2(r.x, r.z) + dir * keep
+				p.x = clampf(q.x, -HALF + 2, HALF - 2)
+				p.z = clampf(q.y, -HALF + 2, HALF - 2)
 		# 경사로 위/아래 애매한 곳은 바닥으로
 		out.append(p)
 	return out

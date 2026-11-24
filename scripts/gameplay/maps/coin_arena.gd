@@ -28,6 +28,34 @@ func _ready() -> void:
 	for i in 8:
 		var a := TAU * i / 8.0
 		spawn_points.append(Vector3(sin(a) * 4.0, 0.5, cos(a) * 4.0))
+	_decorate()
+
+
+## 시각 장식: 잔디 줄무늬, 울타리 기둥, 발판 테두리, 구석 꽃, 가운데 동전 문양
+func _decorate() -> void:
+	if is_headless:
+		return
+	var stripe := BoxMesh.new()
+	stripe.size = Vector3(3.0, 0.02, HALF * 2 - 1.0)
+	for i in 5:
+		add_mesh(stripe, Vector3(-12.0 + i * 6.0, 0.01, 0), Color(0.68, 0.9, 0.6))
+	var post := BoxMesh.new()
+	post.size = Vector3(0.8, 1.5, 0.8)
+	var cols := [Color(1.0, 0.6, 0.7), Color(0.55, 0.75, 1.0), Color(1.0, 0.82, 0.35), Color(0.6, 0.88, 0.55)]
+	var k := 0
+	for t in range(-15, 16, 5):
+		for side in [-1.0, 1.0]:
+			add_mesh(post, Vector3(t, 0.75, HALF * side), cols[k % 4])
+			add_mesh(post, Vector3(HALF * side, 0.75, t), cols[(k + 2) % 4])
+			k += 1
+	for p in platforms:
+		var top: float = p["top"]
+		add_edge_trim(Vector3(p["center"].x, top * 0.5, p["center"].z), Vector3(6, top, 6), Color(1, 1, 1))
+	add_mesh(cyl_mesh(2.2, 2.2, 0.03, 32), Vector3(0, 0.02, 0), Color(1.0, 0.86, 0.35))
+	add_mesh(cyl_mesh(1.6, 1.6, 0.035, 32), Vector3(0, 0.03, 0), Color(1.0, 0.95, 0.7))
+	# 발판 아래 꽃 (경기장 밖은 바닥이 없으므로 안쪽 구석에만)
+	for c in [Vector3(-12.5, 0, 12.5), Vector3(12.5, 0, -12.5)]:
+		add_flowers(c, 1.6, 18, int(c.x * 3 + 90))
 
 
 func random_coin_points(rng: RandomNumberGenerator, n: int) -> Array[Vector3]:
@@ -55,8 +83,12 @@ func apply_mode_state(state: Dictionary) -> void:
 		cm.bottom_radius = 0.45
 		cm.height = 0.12
 		mi.mesh = cm
-		mi.material_override = toon_material(Color(1.0, 0.85, 0.2))
+		mi.material_override = glow_material(Color(1.0, 0.8, 0.25), 1.15)
 		mi.rotation_degrees.x = 90
+		var face := MeshInstance3D.new()   # 가운데 밝은 원 (동전 무늬)
+		face.mesh = cyl_mesh(0.28, 0.28, 0.14, 16)
+		face.material_override = glow_material(Color(1.0, 0.95, 0.6), 1.3)
+		mi.add_child(face)
 		add_child(mi)
 		_coin_nodes.append(mi)
 	for i in _coin_nodes.size():

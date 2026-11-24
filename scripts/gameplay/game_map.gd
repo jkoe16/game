@@ -346,6 +346,68 @@ static func glow_material(color: Color, energy := 1.5) -> StandardMaterial3D:
 	return _glow_cache[key]
 
 
+## 출발/결승 아치 (기둥 2개 + 위 현수막 + 구슬). 로컬 X 방향으로 폭 width. 시각 전용
+func add_arch(pos: Vector3, width: float, height: float, color: Color, yaw_deg := 0.0) -> void:
+	if is_headless:
+		return
+	var root := Node3D.new()
+	root.position = pos
+	root.rotation_degrees.y = yaw_deg
+	add_child(root)
+	var half := width * 0.5
+	for sx in [-1.0, 1.0]:
+		add_mesh(cyl_mesh(0.32, 0.4, height, 14), Vector3(half * sx, height * 0.5, 0), color.darkened(0.12), Vector3.ZERO, Vector3.ONE, root)
+		add_mesh(sphere_mesh(0.48, 14), Vector3(half * sx, height + 0.2, 0), color.lightened(0.4), Vector3.ZERO, Vector3.ONE, root)
+		add_mesh(cyl_mesh(0.55, 0.6, 0.35, 14), Vector3(half * sx, 0.17, 0), Color(0.95, 0.9, 0.85), Vector3.ZERO, Vector3.ONE, root)
+	var banner := BoxMesh.new()
+	banner.size = Vector3(width, 1.1, 0.3)
+	add_mesh(banner, Vector3(0, height - 0.45, 0), color, Vector3.ZERO, Vector3.ONE, root)
+	var trim := BoxMesh.new()
+	trim.size = Vector3(width, 0.18, 0.36)
+	add_mesh(trim, Vector3(0, height + 0.12, 0), color.lightened(0.45), Vector3.ZERO, Vector3.ONE, root)
+	add_mesh(trim, Vector3(0, height - 1.02, 0), color.lightened(0.45), Vector3.ZERO, Vector3.ONE, root)
+
+
+## 체크무늬 띠 (결승선 등). 바닥 위 아주 얇게, X 방향 폭 width, Z 방향 깊이 depth
+func add_checker(center: Vector3, width: float, depth: float, cell := 0.7, a := Color(1, 1, 1), b := Color(0.25, 0.22, 0.35)) -> void:
+	if is_headless:
+		return
+	var nx := maxi(1, int(round(width / cell)))
+	var nz := maxi(1, int(round(depth / cell)))
+	var cw := width / nx
+	var cd := depth / nz
+	var bm := BoxMesh.new()
+	bm.size = Vector3(cw, 0.04, cd)
+	for i in nx:
+		for k in nz:
+			var p := center + Vector3(-width * 0.5 + cw * (i + 0.5), 0.02, -depth * 0.5 + cd * (k + 0.5))
+			add_mesh(bm, p, a if (i + k) % 2 == 0 else b)
+
+
+## 깃발 (기둥 + 삼각 깃발 모양의 납작한 상자)
+func add_flag(pos: Vector3, color: Color, yaw_deg := 0.0, height := 3.2) -> void:
+	if is_headless:
+		return
+	add_mesh(cyl_mesh(0.06, 0.08, height, 8), pos + Vector3(0, height * 0.5, 0), Color(0.95, 0.95, 1.0))
+	add_mesh(sphere_mesh(0.12, 8), pos + Vector3(0, height + 0.08, 0), Color(1.0, 0.85, 0.35))
+	var flag := cyl_mesh(0.0, 0.5, 0.9, 3)
+	add_mesh(flag, pos + Vector3(0, height - 0.45, 0) + Vector3(0.45, 0, 0).rotated(Vector3.UP, deg_to_rad(yaw_deg)), color, Vector3(0, yaw_deg, -90), Vector3(1, 1, 0.25))
+
+
+## 판 윗면 가장자리를 두르는 밝은 띠 (시각 전용)
+func add_edge_trim(pos: Vector3, size: Vector3, color: Color, w := 0.35) -> void:
+	if is_headless:
+		return
+	var top := pos.y + size.y * 0.5 + 0.015
+	var bx := BoxMesh.new()
+	bx.size = Vector3(size.x, 0.03, w)
+	var bz := BoxMesh.new()
+	bz.size = Vector3(w, 0.03, size.z)
+	for s in [-1.0, 1.0]:
+		add_mesh(bx, Vector3(pos.x, top, pos.z + s * (size.z * 0.5 - w * 0.5)), color)
+		add_mesh(bz, Vector3(pos.x + s * (size.x * 0.5 - w * 0.5), top, pos.z), color)
+
+
 ## 떠 있는 섬의 아랫부분: 아래로 갈수록 좁아지는 바위층
 func add_island_underside(center: Vector3, top_radius: float, depth: float, rock := Color(0.66, 0.55, 0.52)) -> void:
 	if is_headless:
@@ -542,9 +604,21 @@ func mover_pos(i: int, tick: int) -> Vector3:
 func add_pad(kind: String, center: Vector3, half: Vector3, power := 15.0) -> void:
 	pads.append({"kind": kind, "center": center, "half": half, "power": power})
 	if not is_headless:
-		var c := Color(1.0, 0.85, 0.2) if kind == "boost" else Color(0.4, 1.0, 0.6)
-		add_box(center + Vector3(0, 0.03, 0), Vector3(half.x * 2.0, 0.06, half.z * 2.0), c, Vector3.ZERO, false)
-		add_label(center + Vector3(0, 1.2, 0), "▲▲" if kind == "boost" else "⤒", 48, c)
+		var c := Color(1.0, 0.82, 0.25) if kind == "boost" else Color(0.35, 0.95, 0.6)
+		var base := BoxMesh.new()
+		base.size = Vector3(half.x * 2.0 + 0.3, 0.08, half.z * 2.0 + 0.3)
+		add_mesh(base, center + Vector3(0, 0.03, 0), Color(0.98, 0.96, 1.0))
+		var glow := BoxMesh.new()
+		glow.size = Vector3(half.x * 2.0, 0.1, half.z * 2.0)
+		add_mesh(glow, center + Vector3(0, 0.05, 0), glow_material(c, 1.1))
+		# 화살표 줄무늬 (밝은 막대 3개)
+		var along_z := half.z >= half.x
+		var stripe := BoxMesh.new()
+		stripe.size = Vector3(half.x * 1.6, 0.04, 0.22) if along_z else Vector3(0.22, 0.04, half.z * 1.6)
+		for k in 3:
+			var o := (k - 1) * minf(half.z, half.x if not along_z else half.z) * 0.55
+			add_mesh(stripe, center + (Vector3(0, 0.11, o) if along_z else Vector3(o, 0.11, 0)), glow_material(Color(1, 1, 1), 1.0))
+		add_label(center + Vector3(0, 1.3, 0), "부스트" if kind == "boost" else "점프!", 44, c.lightened(0.3))
 
 
 func add_gate(pos: Vector3, size: Vector3, color := Color(0.75, 0.55, 0.95)) -> int:

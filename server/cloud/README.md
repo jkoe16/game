@@ -60,6 +60,8 @@
    server_url="wss://my-party-world.fly.dev"
    ```
 2. 웹 다시 배포: `bash server/deployment/deploy_web.sh` → https://game-28f1b.web.app 메뉴에 **"친구들과 온라인 플레이"** 버튼이 생김
+   - PowerShell 없이: GitHub → Actions → **"웹 배포 (Firebase + GitHub Pages)"** → Run workflow
+     (Firebase까지 올리려면 `FIREBASE_SERVICE_ACCOUNT` 비밀값 필요. 방법은 `.github/workflows/deploy-web.yml` 맨 위 설명)
 3. PC 버전 다시 빌드: `"$GODOT" --headless --path . --export-release "Windows" build/windows/3DPartyWorld.exe`
 
 친구에게는 **https://game-28f1b.web.app 링크만** 보내면 돼요. 로그인(게스트 가능) → "친구들과 온라인 플레이" → 같은 광장에서 만남 → 포털에 올라서면 다 같이 미니게임으로 이동.

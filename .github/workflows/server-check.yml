@@ -11,7 +11,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: 서버 깨우고 상태 읽기
         run: |
-          url=$(grep -o 'wss://[^"]*' config/online.cfg | sed 's#^wss://#https://#')
+          url=$(grep '^server_url' config/online.cfg | grep -o 'wss://[^"]*' | sed 's#^wss://#https://#')
           echo "서버: $url"
           for i in $(seq 1 12); do
             if out=$(curl -fsS --max-time 20 "$url/healthz"); then

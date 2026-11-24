@@ -152,6 +152,15 @@ if (scenario === "portal") {
   check((lobbyLog.match(/joined as 'Traveler'/g) || []).length >= 2, "player re-joined the lobby after the round");
 }
 
+if (scenario === "jitter") {
+  for (const n of ["walker1", "walker2"]) {
+    const c = result(n, "CLIENT_RESULT");
+    console.log(`    [${n}] corrections=${c && c.corrections} small=${c && c.small_corrections} max_small=${c && c.max_small_correction} teleports=${c && c.teleports} moved=${c && c.distance_moved}`);
+    check(c && c.welcomed && c.distance_moved > 30, `${n} joined and moved through the jittery link`);
+    check(c && c.small_corrections <= 12, `${n} few position corrections despite jitter (no sliding)`, c && String(c.small_corrections));
+  }
+}
+
 if (scenario === "gateway") {
   const c = result("traveler", "CLIENT_RESULT");
   check(c && c.welcomed !== undefined, "client connected through the gateway", c && JSON.stringify(c).slice(0, 80));

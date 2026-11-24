@@ -23,6 +23,9 @@ var bot_mode := ""
 var external_move := Vector2.ZERO
 var external_jump := false
 var _jump_hold := 0
+## 보정 직후 모습(CharacterVisual)에 남겨 두는 오프셋 → 빠르게 0으로 줄어든다
+var _smooth_offset := Vector3.ZERO
+var _visual: Node3D
 
 var seq := 0
 var history: Array = []   # [{seq:int, input:PlayerInput, pos:Vector3, wt:int}]
@@ -46,6 +49,20 @@ var max_correction := 0.0
 var distance_moved := 0.0
 
 var _bot_time := 0.0
+
+
+func _process(delta: float) -> void:
+	if _smooth_offset == Vector3.ZERO or body == null:
+		return
+	if _visual == null:
+		for c in body.get_children():
+			if c is CharacterVisual:
+				_visual = c
+	_smooth_offset = _smooth_offset.lerp(Vector3.ZERO, 1.0 - exp(-28.0 * delta))
+	if _smooth_offset.length() < 0.005:
+		_smooth_offset = Vector3.ZERO
+	if _visual:
+		_visual.position = _smooth_offset
 
 
 func _physics_process(delta: float) -> void:
@@ -163,6 +180,7 @@ func _reconcile_now(e: Dictionary) -> void:
 	else:
 		small_corrections += 1
 		max_small_correction = maxf(max_small_correction, err)
+	var shown_before := body.global_position
 	body.global_position = server_pos
 	body.velocity = e["vel"]
 	body.air_time = e["air"]
@@ -179,6 +197,11 @@ func _reconcile_now(e: Dictionary) -> void:
 		h["pos"] = body.global_position
 	if err > 2.0:
 		body.reset_physics_interpolation()
+	else:
+		# 작은 보정은 순간이동처럼 튀지 않게: 모습만 이전 자리에서 0.1초 동안 따라오게 한다
+		_smooth_offset += shown_before - body.global_position
+		if _smooth_offset.length() > 1.5:
+			_smooth_offset = Vector3.ZERO
 
 
 ## 이 입력이 서버에서 처리될 것으로 예상되는 서버 틱 (오프라인은 로컬 틱)

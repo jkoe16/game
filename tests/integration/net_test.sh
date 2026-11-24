@@ -10,6 +10,7 @@
 #            = minigames: 미니게임 5종 서버 + 봇 2개씩, 한 판 전체 진행 (대기→카운트다운→경기→결과)
 #            = portal   : 로비 포털 → 장애물 레이스 서버 → 결과 후 로비 복귀
 #            = ws       : basic과 같지만 WebSocket 전송 (웹 브라우저 접속 경로)
+#            = jitter   : WebSocket + 입력이 0~300ms씩 몰려 도착하는 프록시 → 보정(미끄러짐)이 적은지
 #            = gateway  : 클라우드 게이트웨이(server/cloud/gateway.js)가 서버 6개 실행, 봇이 ws://게이트웨이/ 로 접속 → 포털 → 레이스 → 로비
 #            = rooms    : 게이트웨이 방 코드 (방끼리 격리, 방 전용 미니게임 이동, 빈 서버 자동 종료)
 #            = offline  : 서버 없이 로컬 규칙 실행 (오프라인/웹 연습): 포털 → 레이스 완주 → 로비 복귀
@@ -72,6 +73,15 @@ case "$SCENARIO" in
     run flood 11 --connect="$WS" --nickname=Flooder --bot=flood
     run badversion 6 --connect="$WS" --nickname=OldClient --bot=badversion
     run silent 10 --connect="$WS" --nickname=Silent --bot=silent
+    ;;
+  jitter)
+    # 들쭉날쭉한 인터넷(입력이 0~300ms씩 몰려 도착)에서도 보정(미끄러짐)이 적어야 한다
+    run server 22 --server --transport=ws --auth=dev --port="$PORT" --max-players=8 --report-at=17
+    node "$ROOT/tests/integration/jitter_proxy.js" $((PORT + 1)) "$PORT" 300 > "$OUT/jitter.txt" 2>&1 &
+    GW_PID=$!
+    sleep 2
+    run walker1 18 --connect="ws://127.0.0.1:$((PORT + 1))" --nickname=Walker1 --bot=walker
+    run walker2 18 --connect="ws://127.0.0.1:$((PORT + 1))" --nickname=Walker2 --bot=walker
     ;;
   gateway)
     GW_PORT=18080

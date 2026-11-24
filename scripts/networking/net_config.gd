@@ -17,9 +17,11 @@ const CH_SNAPSHOT := 2   # 서버 상태 스냅샷 (unreliable_ordered)
 const TICK_RATE := 60
 const SNAPSHOT_EVERY_N_TICKS := 2      # 30 Hz
 const INPUT_REDUNDANCY := 16           # 패킷마다 서버가 아직 확인(ack)하지 않은 입력을 최대 16개까지 함께 보냄 (손실 버스트 복구)
-const MAX_INPUT_QUEUE := 8             # 서버 입력 대기열 상한 (지연 누적 방지)
-const INPUT_CREDIT_MAX := 8.0          # 입력 시간 예산 상한 (틱). 이만큼 입력이 없으면 외삽 시작
-const MAX_INPUTS_PER_TICK := 3         # 한 틱에 따라잡기로 처리할 수 있는 최대 입력 수
+## 웹(WebSocket=TCP)은 입력이 사라지지 않는 대신 0.1~0.3초씩 몰려 도착한다.
+## 이때 입력을 버리거나 멋대로 외삽하면 클라이언트 예측과 어긋나 캐릭터가 미끄러지듯 보정된다 → 넉넉하게.
+const MAX_INPUT_QUEUE := 30            # 서버 입력 대기열 상한 (0.5초분, 그 이상만 버림)
+const INPUT_CREDIT_MAX := 20.0         # 입력 시간 예산 상한 (틱). 약 0.33초 입력이 없을 때만 외삽 시작
+const MAX_INPUTS_PER_TICK := 4         # 한 틱에 따라잡기로 처리할 수 있는 최대 입력 수
 const MAX_SEQ_JUMP := 600              # 이보다 큰 seq 점프는 위조로 간주
 const MAX_INPUT_PACKETS_PER_SEC := 90  # 정상: 60/s
 const FLOOD_KICK_PACKETS_PER_SEC := 240

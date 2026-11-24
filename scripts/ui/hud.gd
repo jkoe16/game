@@ -2,7 +2,13 @@ class_name Hud
 extends CanvasLayer
 ## 인게임 HUD: 개발 정보 + 조작 안내 + 게임 모드(제목·규칙·카운트다운·남은 시간·점수판·결과).
 
+signal leave_requested
+
 var client: GameClient
+var _people: Label
+var _invite_btn: Button
+var _toast: Label
+var _toast_left := 0.0
 var _status: Label
 var _info: Label
 var _mode_title: Label
@@ -25,10 +31,35 @@ func _ready() -> void:
 	_room.visible = false
 	_status = _label(box, 22)
 	_info = _label(box, 16)
+	_people = _label(box, 18)
 	var help := _label(box, 16)
 	help.text = "WASD 이동 · Shift 걷기 · Space 점프 · 클릭 후 마우스 카메라 · 휠 줌 · 1~4 감정표현 · Esc 마우스 해제"
 	if DisplayServer.is_touchscreen_available():
 		help.text = "왼쪽 조이스틱 이동 · 오른쪽 드래그 카메라 · 버튼으로 점프/감정표현"
+
+	# 위쪽 가운데: 초대 링크 복사 / 나가기
+	var top := HBoxContainer.new()
+	top.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	top.offset_left = -170
+	top.offset_right = 170
+	top.offset_top = 10
+	top.alignment = BoxContainer.ALIGNMENT_CENTER
+	top.add_theme_constant_override("separation", 10)
+	add_child(top)
+	_invite_btn = _hud_button("초대 링크 복사", _copy_invite)
+	top.add_child(_invite_btn)
+	top.add_child(_hud_button("나가기", func() -> void: leave_requested.emit()))
+	_toast = Label.new()
+	_toast.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_toast.offset_left = -300
+	_toast.offset_right = 300
+	_toast.offset_top = 130
+	_toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_toast.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_toast.add_theme_font_size_override("font_size", 20)
+	_toast.add_theme_color_override("font_outline_color", Color(0.1, 0.1, 0.2))
+	_toast.add_theme_constant_override("outline_size", 6)
+	add_child(_toast)
 
 	var right := VBoxContainer.new()
 	right.anchor_left = 1.0
@@ -76,26 +107,62 @@ func _ready() -> void:
 	add_child(_results)
 
 
+func _hud_button(text: String, cb: Callable) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.custom_minimum_size = Vector2(0, 46)
+	b.add_theme_font_size_override("font_size", 19)
+	b.focus_mode = Control.FOCUS_NONE  # 스페이스(점프)로 버튼이 눌리지 않게
+	b.pressed.connect(cb)
+	b.add_to_group("touch_ui")
+	return b
+
+
+func _copy_invite() -> void:
+	var code := OnlineConfig.room_from_url(client.address) if client else ""
+	if code == "":
+		return
+	var link := OnlineConfig.invite_link(code)
+	DisplayServer.clipboard_set(link)
+	show_toast("복사했어요! 친구에게 보내 주세요\n%s" % link)
+
+
+func show_toast(text: String, secs := 4.0) -> void:
+	_toast.text = text
+	_toast_left = secs
+
+
 func set_status(text: String) -> void:
 	if _status:
 		_status.text = text
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	if _toast_left > 0.0:
+		_toast_left -= delta
+		if _toast_left <= 0.0:
+			_toast.text = ""
 	if client == null or _info == null:
 		return
 	var code := OnlineConfig.room_from_url(client.address) if not client.offline else ""
 	_room.visible = code != ""
+	_invite_btn.visible = code != ""
 	if code != "":
 		_room.text = "방 코드: %s  (친구에게 알려 주세요)" % code
+	_people.visible = not client.offline and client.local_player != null
+	if _people.visible:
+		var names: Array[String] = ["나(%s)" % client.nickname]
+		for id in client.remote_names:
+			names.append(str(client.remote_names[id]))
+		var shown := names.slice(0, 8)
+		_people.text = "함께 있는 사람 %d명: %s%s" % [names.size(), ", ".join(shown), " 외 %d명" % (names.size() - 8) if names.size() > 8 else ""]
 	if client.offline:
 		_info.text = "FPS %d" % Engine.get_frames_per_second()
 	else:
-		var count := client.remotes.size() + (1 if client.local_player else 0)
 		var corr := client.controller.corrections if client.controller else 0
 		var rtt := Net.get_rtt_ms()
 		var ping := "%d ms" % rtt if rtt >= 0 else "-"
-		_info.text = "플레이어 %d명 · 핑 %s · 서버 보정 %d회 · FPS %d" % [count, ping, corr, Engine.get_frames_per_second()]
+		_info.text = "핑 %s · 서버 보정 %d회 · FPS %d" % [ping, corr, Engine.get_frames_per_second()]
 	_update_mode()
 
 

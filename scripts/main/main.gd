@@ -123,6 +123,7 @@ func _start_client(host: String, port: int, offline: bool) -> void:
 		hud.client = client
 		add_child(hud)
 		client.status_changed.connect(hud.set_status)
+		hud.leave_requested.connect(_return_to_menu.bind(""))
 	client.session_ended.connect(_on_session_ended)
 	client.start()
 
@@ -229,6 +230,41 @@ func _on_session_ended(reason: String) -> void:
 		return  # 테스트 모드: 결과 보고 시점까지 대기
 	if DisplayServer.get_name() == "headless":
 		_quit_with_report()
+		return
+	# 화면이 있는 게임: 끊기면 잠깐 이유를 보여 주고 메뉴로
+	var why := {
+		"room_full": "방이 꽉 찼어요.", "connection_failed": "서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.",
+		"server_disconnected": "서버와 연결이 끊어졌어요.", "version_mismatch": "게임 버전이 달라요. 페이지를 새로고침(Ctrl+F5) 해 주세요.",
+		"auth_failed": "로그인이 확인되지 않았어요. 다시 로그인해 주세요.",
+	}
+	var msg: String = why.get(reason, "연결이 끝났어요. (%s)" % reason)
+	var ended_client := client
+	get_tree().create_timer(2.0).timeout.connect(func() -> void:
+		if client == ended_client:  # 그 사이 새 게임을 시작했으면 건드리지 않음
+			_return_to_menu(msg))
+
+
+## 게임에서 나와 메뉴로 (나가기 버튼, 연결 끊김)
+func _return_to_menu(notice: String) -> void:
+	if client == null:
+		return
+	if client.session_ended.is_connected(_on_session_ended):
+		client.session_ended.disconnect(_on_session_ended)
+	Net.client_handler = null
+	Net.stop()
+	client.queue_free()
+	client = null
+	if hud:
+		hud.queue_free()
+		hud = null
+	for pid in _local_server_pids:
+		if pid > 0:
+			OS.kill(pid)
+	_local_server_pids.clear()
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	await _show_menu()
+	if menu:
+		menu.show_notice(notice)
 
 
 func _save_screenshot() -> void:

@@ -263,7 +263,7 @@ func _notification(what: int) -> void:
 		_local_server_pids.clear()
 
 
-## 모드 설정 인자: --transport=enet|ws --routes=auto|gateway|mode=host:port,... --lobby=host:port --min-players= --wait-sec= --countdown-sec= --round-sec= --results-sec=
+## 모드 설정 인자: --transport=enet|ws --routes=auto|gateway|mode=host:port,... --route-prefix=/r/방코드 --lobby=host:port --min-players= --wait-sec= --countdown-sec= --round-sec= --results-sec=
 func _mode_cfg_from_args() -> Dictionary:
 	var cfg := {}
 	for k in ["min-players", "wait-sec", "countdown-sec", "round-sec", "results-sec", "lobby"]:
@@ -275,11 +275,13 @@ func _mode_cfg_from_args() -> Dictionary:
 	if routes_arg == "auto":
 		cfg["routes"] = ModeRegistry.default_routes()
 	elif routes_arg == "gateway":
-		# 클라우드: 게이트웨이 한 주소 아래 경로로 구분 (wss://서버/obstacle_race). 클라이언트가 현재 주소 기준으로 경로만 바꿈
+		# 클라우드: 게이트웨이 한 주소 아래 경로로 구분 (wss://서버/obstacle_race, 방이면 wss://서버/r/K7QP/obstacle_race).
+		# 클라이언트가 현재 주소 기준으로 경로만 바꿈. --route-prefix=/r/K7QP
+		var prefix := str(args.get("route-prefix", "")) if typeof(args.get("route-prefix", "")) == TYPE_STRING else ""
 		var g := {}
 		for id in ModeRegistry.MODES:
 			if id != "lobby":
-				g[id] = "/" + id
+				g[id] = prefix + "/" + id
 		cfg["routes"] = g
 	elif routes_arg != "":
 		var r := {}

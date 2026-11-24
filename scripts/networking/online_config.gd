@@ -17,3 +17,38 @@ static func server_url() -> String:
 	if cf.load(PATH) != OK:
 		return ""
 	return str(cf.get_value("online", "server_url", "")).strip_edges()
+
+
+# ------------------------------------------------------------ 방 코드
+## 헷갈리는 글자(0/O, 1/I/L)는 뺀 문자들
+const ROOM_CHARS := "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+const ROOM_CODE_LEN := 4
+
+
+static func new_room_code() -> String:
+	var s := ""
+	for i in ROOM_CODE_LEN:
+		s += ROOM_CHARS[randi() % ROOM_CHARS.length()]
+	return s
+
+
+## 입력값 정리: 대문자, 공백·기호 제거. 4~8자 영문/숫자가 아니면 ""
+static func normalize_room_code(text: String) -> String:
+	var out := ""
+	for ch in text.strip_edges().to_upper():
+		if (ch >= "A" and ch <= "Z") or (ch >= "0" and ch <= "9"):
+			out += ch
+	return out if out.length() >= 4 and out.length() <= 8 else ""
+
+
+## "wss://서버" + "K7QP" → "wss://서버/r/K7QP"
+static func room_url(server: String, code: String) -> String:
+	return server.trim_suffix("/") + "/r/" + code
+
+
+## "wss://서버/r/K7QP/racing" → "K7QP" (방이 아니면 "")
+static func room_from_url(url: String) -> String:
+	var i := url.find("/r/")
+	if i < 0 or not (url.begins_with("ws://") or url.begins_with("wss://")):
+		return ""
+	return url.substr(i + 3).get_slice("/", 0)

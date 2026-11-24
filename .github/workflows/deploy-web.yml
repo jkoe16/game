@@ -1,0 +1,86 @@
+# 웹 버전을 빌드해서 Firebase Hosting(https://game-28f1b.web.app)과 GitHub Pages(https://jkoe16.github.io/game/)에 올린다.
+# PowerShell 없이 GitHub 웹에서 실행: Actions → "웹 배포 (Firebase + GitHub Pages)" → Run workflow
+#
+# Firebase 배포 준비 (한 번만):
+#   1. Firebase 콘솔 → 프로젝트 설정(톱니바퀴) → 서비스 계정 → "새 비공개 키 생성" → JSON 파일 다운로드
+#   2. GitHub 저장소 → Settings → Secrets and variables → Actions → New repository secret
+#      이름: FIREBASE_SERVICE_ACCOUNT / 값: 다운로드한 JSON 파일 내용 전체
+#   (이 비밀값이 없으면 GitHub Pages에만 올린다)
+name: 웹 배포 (Firebase + GitHub Pages)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write   # gh-pages 브랜치 갱신
+
+concurrency:
+  group: deploy-web
+  cancel-in-progress: false
+
+env:
+  GODOT_VERSION: "4.7.2"
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Godot + 웹 내보내기 템플릿 설치
+        run: |
+          set -e
+          BASE="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
+          curl -fsSL -o godot.zip "$BASE/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q godot.zip && mv "Godot_v${GODOT_VERSION}-stable_linux.x86_64" /usr/local/bin/godot && rm godot.zip
+          curl -fsSL -o tpl.tpz "$BASE/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          T="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          mkdir -p "$T"
+          unzip -q -j tpl.tpz 'templates/web_nothreads_release.zip' 'templates/web_nothreads_debug.zip' 'templates/version.txt' -d "$T"
+          rm tpl.tpz
+
+      - name: 웹 빌드
+        run: |
+          set -e
+          grep server_url config/online.cfg
+          mkdir -p build/web && touch build/.gdignore
+          godot --headless --path . --import > import.log 2>&1 || (tail -40 import.log; exit 1)
+          godot --headless --path . --export-release "Web" build/web/index.html
+          test -f build/web/index.wasm
+          touch build/web/.nojekyll
+
+      - name: GitHub Pages 배포
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          cd build/web
+          git init -q -b gh-pages
+          git add -A
+          git commit -q -m "웹 빌드 ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
+          echo "- GitHub Pages: https://jkoe16.github.io/game/" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Firebase 비밀값 확인
+        id: fb
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -n "$SA" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "- Firebase: FIREBASE_SERVICE_ACCOUNT 비밀값이 없어 건너뜀" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Firebase Hosting 배포
+        if: steps.fb.outputs.ok == 'true'
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          set -e
+          rm -rf server/firebase/public && cp -r build/web server/firebase/public
+          printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
+          cd server/firebase
+          GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json" npx --yes firebase-tools@latest deploy --only hosting --project game-28f1b --non-interactive
+          rm -f "$RUNNER_TEMP/sa.json"
+          echo "- Firebase: https://game-28f1b.web.app" >> "$GITHUB_STEP_SUMMARY"

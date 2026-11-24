@@ -24,7 +24,7 @@ function scriptErrors(name) {
   return fs.readFileSync(file, "utf8").split(/\r?\n/).filter(l => /SCRIPT ERROR|Parse Error|Invalid call|Invalid access/.test(l));
 }
 
-const NO_MAIN_SERVER = ["authflow", "minigames", "touch", "offline", "gateway"].includes(scenario);
+const NO_MAIN_SERVER = ["authflow", "minigames", "touch", "offline", "gateway", "rooms"].includes(scenario);
 const server = NO_MAIN_SERVER ? { players: [], stats: {} } : result("server", "SERVER_RESULT");
 if (!NO_MAIN_SERVER) check(server !== null, "server produced a report");
 if (!server) process.exit(1);
@@ -159,8 +159,28 @@ if (scenario === "gateway") {
   check(c && c.transfers.includes("round_over"), "after results the player returned to the lobby via gateway path", c && JSON.stringify(c.transfers));
   const gw = fs.readFileSync(path.join(dir, "gateway.txt"), "utf8");
   check(gw.includes("GATEWAY_READY"), "gateway started");
-  check((gw.match(/\[lobby\].*joined as 'Traveler'/g) || []).length >= 2, "player re-joined the lobby after the round");
-  check((gw.match(/\[obstacle_race\].*joined as 'Traveler'/g) || []).length >= 1, "player joined the race server");
+  check((gw.match(/\[public\/lobby\].*joined as 'Traveler'/g) || []).length >= 2, "player re-joined the lobby after the round");
+  check((gw.match(/\[public\/obstacle_race\].*joined as 'Traveler'/g) || []).length >= 1, "player joined the race server");
+  const errs = gw.split(/\r?\n/).filter(l => /SCRIPT ERROR|Parse Error/.test(l));
+  check(errs.length === 0, "no script errors in gateway-managed servers", errs.slice(0, 3).join(" | "));
+}
+
+if (scenario === "rooms") {
+  const a1 = result("room_a1", "CLIENT_RESULT"), a2 = result("room_a2", "CLIENT_RESULT");
+  const b1 = result("room_b1", "CLIENT_RESULT"), p1 = result("public1", "CLIENT_RESULT");
+  check(a1 && a1.welcomed && a2 && a2.welcomed && b1 && b1.welcomed && p1 && p1.welcomed, "all room clients joined");
+  check(a1 && a2 && a1.remote_ids_seen.includes(a2.id) && a2.remote_ids_seen.includes(a1.id), "same room code (case-insensitive) → players see each other");
+  const others = [b1, p1].filter(Boolean).map(x => x.id);
+  check(a1 && a2 && !others.some(id => a1.remote_ids_seen.includes(id) || a2.remote_ids_seen.includes(id)), "room ABCD does not see other rooms or public");
+  check(b1 && b1.remote_ids_seen.length === 0 && p1 && p1.remote_ids_seen.length === 0, "room WXYZ and public are alone");
+  const t = result("traveler", "CLIENT_RESULT");
+  check(t && t.transfers.includes("obstacle_race") && t.transfers.includes("round_over"), "room portal → room race → back to room lobby", t && JSON.stringify(t.transfers));
+  const gw = fs.readFileSync(path.join(dir, "gateway.txt"), "utf8");
+  check(/\[TRIP\/obstacle_race\].*joined as 'Traveler'/.test(gw), "traveler played in the room's own race server");
+  check((gw.match(/\[TRIP\/lobby\].*joined as 'Traveler'/g) || []).length >= 2, "traveler returned to the room's lobby");
+  check(/idle 4s → stop/.test(gw), "empty servers are stopped automatically");
+  const bad = result("bad", "CLIENT_RESULT");
+  check(bad && !bad.welcomed, "invalid room code is refused");
   const errs = gw.split(/\r?\n/).filter(l => /SCRIPT ERROR|Parse Error/.test(l));
   check(errs.length === 0, "no script errors in gateway-managed servers", errs.slice(0, 3).join(" | "));
 }

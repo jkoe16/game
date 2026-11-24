@@ -11,13 +11,21 @@
 
 ## A. 클라우드 서버 (웹 + PC 모두 접속)
 
+### 방 코드
+- 메뉴 **방 만들기** → `K7QP` 같은 4글자 코드가 생기고 화면 왼쪽 위에 표시 → 친구는 코드를 입력하고 **입장**
+- 같은 코드끼리만 같은 광장·같은 미니게임에 들어가요. 다른 방이나 공개 광장 사람은 보이지 않아요.
+- **공개 광장 입장**은 코드 없이 누구나 모이는 곳.
+- 서버(방 × 모드)는 누가 들어올 때 켜지고 60초 동안 비면 꺼져요. 무료 서버(512MB)는 동시에 서버 8개까지라
+  방이 많이 열려 있으면 새 방 입장이 잠시 실패할 수 있어요 (`MAX_SERVERS`로 조정).
+
 ### 구조
 ```
  [웹 브라우저] ─┐                     ┌─ Godot 서버: 로비 (7777)
  [PC 버전]   ─┼─ wss://주소/경로 ─ [gateway.js] ─┼─ Godot 서버: 장애물 레이스 (7781) ... 미니게임 5개
  [휴대폰 웹]  ─┘    (한 포트, 8080)     └─ (죽으면 자동 재시작)
 ```
-- `server/cloud/gateway.js`: 의존성 없는 Node.js 게이트웨이. 경로(`/`, `/obstacle_race` 등)를 보고 내부 Godot 서버로 연결을 넘긴다.
+- `server/cloud/gateway.js`: 의존성 없는 Node.js 게이트웨이. 경로(`/`, `/obstacle_race`, `/r/방코드/racing` 등)를 보고
+  해당 Godot 서버를 필요할 때 켜서 연결을 넘기고, 비면 끈다.
 - Godot 서버는 `--transport=ws`(WebSocket)로 실행. 로비 포털 → 미니게임 이동은 `/obstacle_race` 같은 **경로**로 안내.
 - `Dockerfile`: Godot 4.7.2 + 게이트웨이를 한 컨테이너로. 메모리 약 320MB 사용.
 - 로그인: `config/firebase.cfg`가 있으므로 서버는 Firebase 토큰을 검증한다 (게스트 로그인도 가능).
@@ -60,6 +68,8 @@
    server_url="wss://my-party-world.fly.dev"
    ```
 2. 웹 다시 배포: `bash server/deployment/deploy_web.sh` → https://game-28f1b.web.app 메뉴에 **"친구들과 온라인 플레이"** 버튼이 생김
+   - PowerShell 없이: GitHub → Actions → **"웹 배포 (Firebase + GitHub Pages)"** → Run workflow
+     (Firebase까지 올리려면 `FIREBASE_SERVICE_ACCOUNT` 비밀값 필요. 방법은 `.github/workflows/deploy-web.yml` 맨 위 설명)
 3. PC 버전 다시 빌드: `"$GODOT" --headless --path . --export-release "Windows" build/windows/3DPartyWorld.exe`
 
 친구에게는 **https://game-28f1b.web.app 링크만** 보내면 돼요. 로그인(게스트 가능) → "친구들과 온라인 플레이" → 같은 광장에서 만남 → 포털에 올라서면 다 같이 미니게임으로 이동.

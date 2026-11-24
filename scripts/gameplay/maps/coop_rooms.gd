@@ -48,6 +48,38 @@ func _ready() -> void:
 
 	for i in 8:
 		spawn_points.append(Vector3(-5.25 + i * 1.5, 0.5, -7.0))
+	_decorate()
+
+
+## 시각 장식: 방마다 다른 색 카펫, 벽 위 장식 띠와 벽등, 모서리 화분, 목표 방 보물
+func _decorate() -> void:
+	if is_headless:
+		return
+	var floor_len := ROOM_LEN * 4.0
+	var rug_cols := [Color(0.75, 0.85, 1.0), Color(1.0, 0.82, 0.88), Color(0.82, 0.95, 0.78), Color(1.0, 0.92, 0.65)]
+	for s in 4:
+		var cz := s * ROOM_LEN
+		var rug := BoxMesh.new()
+		rug.size = Vector3(13.0, 0.03, 15.0)
+		add_mesh(rug, Vector3(0, 0.015, cz + 0.5), rug_cols[s])
+		var rim := BoxMesh.new()
+		rim.size = Vector3(11.8, 0.035, 13.8)
+		add_mesh(rim, Vector3(0, 0.02, cz + 0.5), rug_cols[s].lightened(0.35))
+		for sx in [-1.0, 1.0]:
+			for pz in [cz - 7.0, cz + 7.0]:
+				add_mesh(cyl_mesh(0.42, 0.32, 0.6, 12), Vector3(6.9 * sx, 0.3, pz), Color(0.9, 0.6, 0.45))
+				add_bush(Vector3(6.9 * sx, 0.5, pz), 0.55)
+			add_mesh(sphere_mesh(0.28, 12), Vector3(7.85 * sx, 3.0, cz), glow_material(Color(1.0, 0.88, 0.6), 1.6))
+			add_mesh(cyl_mesh(0.3, 0.3, 0.12, 12), Vector3(7.95 * sx, 3.0, cz), Color(0.6, 0.55, 0.75), Vector3(0, 0, 90))
+	var cap := BoxMesh.new()
+	cap.size = Vector3(1.3, 0.25, floor_len)
+	for sx in [-1.0, 1.0]:
+		add_mesh(cap, Vector3(8.5 * sx, 4.1, floor_len * 0.5 - 10.0), Color(0.85, 0.88, 1.0))
+	# 목표 방: 받침대 + 빛나는 보물 별
+	var gz := 3 * ROOM_LEN
+	add_mesh(cyl_mesh(1.3, 1.5, 0.6, 24), Vector3(0, 0.3, gz + 5.0), Color(0.95, 0.9, 0.85))
+	add_mesh(sphere_mesh(0.7, 18), Vector3(0, 1.4, gz + 5.0), glow_material(Color(1.0, 0.85, 0.3), 1.8))
+	add_flowers(Vector3(0, 0, gz + 5.0), 2.6, 30, 77)
 
 
 func stage_start(stage: int) -> Vector3:

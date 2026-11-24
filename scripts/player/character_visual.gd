@@ -231,6 +231,9 @@ static func _flat(color: Color) -> StandardMaterial3D:
 
 func _build_animations() -> void:
 	var lib := AnimationLibrary.new()
+	# RESET = 기본 자세. 어떤 동작에 없는 부위(예: idle의 발)는 이 값으로 돌아간다.
+	# 없으면 Godot가 빠진 위치를 (0,0,0)으로 채워서 두 발·두 손이 몸 한가운데 겹쳐 보였다.
+	lib.add_animation("RESET", _anim_reset())
 	lib.add_animation("idle", _anim_idle())
 	lib.add_animation("walk", _anim_gait(0.5, 0.14, 0.08, 0.06, 0.12, 4.0, 3.0))
 	lib.add_animation("run", _anim_gait(0.36, 0.22, 0.14, 0.10, 0.2, 12.0, 4.0))
@@ -339,6 +342,15 @@ func _scl(a: Animation, path: String, keys: Array) -> void:
 	a.track_set_path(t, NodePath(path))
 	for k in keys:
 		a.scale_track_insert_key(t, k[0], k[1])
+
+
+func _anim_reset() -> Animation:
+	var a := _new_anim(0.001, false)
+	for path: String in REST:
+		_pos(a, path, [[0.0, Vector3.ZERO]])
+		_rot(a, path, [[0.0, Vector3.ZERO]])
+		_scl(a, path, [[0.0, Vector3.ONE]])
+	return a
 
 
 func _anim_idle() -> Animation:

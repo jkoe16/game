@@ -11,12 +11,18 @@ var _board: Label
 var _big: Label
 var _results: PanelContainer
 var _results_label: Label
+var _room: Label
 
 
 func _ready() -> void:
 	var box := VBoxContainer.new()
 	box.position = Vector2(16, 12)
 	add_child(box)
+	_room = _label(box, 26)
+	_room.add_theme_color_override("font_color", Color(1.0, 0.93, 0.45))
+	_room.add_theme_color_override("font_outline_color", Color(0.3, 0.15, 0.35))
+	_room.add_theme_constant_override("outline_size", 8)
+	_room.visible = false
 	_status = _label(box, 22)
 	_info = _label(box, 16)
 	var help := _label(box, 16)
@@ -78,6 +84,10 @@ func set_status(text: String) -> void:
 func _process(_delta: float) -> void:
 	if client == null or _info == null:
 		return
+	var code := OnlineConfig.room_from_url(client.address) if not client.offline else ""
+	_room.visible = code != ""
+	if code != "":
+		_room.text = "방 코드: %s  (친구에게 알려 주세요)" % code
 	if client.offline:
 		_info.text = "FPS %d" % Engine.get_frames_per_second()
 	else:

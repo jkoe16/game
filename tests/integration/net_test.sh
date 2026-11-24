@@ -11,6 +11,7 @@
 #            = portal   : 로비 포털 → 장애물 레이스 서버 → 결과 후 로비 복귀
 #            = ws       : basic과 같지만 WebSocket 전송 (웹 브라우저 접속 경로)
 #            = gateway  : 클라우드 게이트웨이(server/cloud/gateway.js)가 서버 6개 실행, 봇이 ws://게이트웨이/ 로 접속 → 포털 → 레이스 → 로비
+#            = rooms    : 게이트웨이 방 코드 (방끼리 격리, 방 전용 미니게임 이동, 빈 서버 자동 종료)
 #            = offline  : 서버 없이 로컬 규칙 실행 (오프라인/웹 연습): 포털 → 레이스 완주 → 로비 복귀
 #
 # 결과 판정은 tests/integration/check_results.js 가 수행한다 (Node.js 필요).
@@ -80,6 +81,22 @@ case "$SCENARIO" in
     GW_PID=$!
     sleep 4
     run traveler 33 --connect="ws://127.0.0.1:$GW_PORT/" --nickname=Traveler --bot=objective --bot-portal=obstacle_race
+    ;;
+  rooms)
+    # 방 코드: 같은 방끼리만 보이고, 방 전용 미니게임으로 이동했다가 같은 방 로비로 돌아옴. 빈 서버는 자동 종료
+    GW_PORT=18081
+    PORT=$GW_PORT PORT_BASE=27000 GODOT_BIN="$GODOT" GAME_DIR="$ROOT" AUTH_MODE=dev IDLE_SEC=4 \
+      MINIGAME_ARGS="--min-players=1 --wait-sec=1 --countdown-sec=1 --round-sec=8 --results-sec=2" \
+      node "$ROOT/server/cloud/gateway.js" > "$OUT/gateway.txt" 2>&1 &
+    GW_PID=$!
+    sleep 2
+    GW="ws://127.0.0.1:$GW_PORT"
+    run room_a1 16 --connect="$GW/r/ABCD" --nickname=RoomA1 --bot=walker
+    run room_a2 16 --connect="$GW/r/abcd" --nickname=RoomA2 --bot=walker
+    run room_b1 16 --connect="$GW/r/WXYZ" --nickname=RoomB1 --bot=walker
+    run public1 16 --connect="$GW/" --nickname=Public1 --bot=walker
+    run traveler 36 --connect="$GW/r/TRIP" --nickname=Traveler --bot=objective --bot-portal=obstacle_race
+    run bad 6 --connect="$GW/r/x!" --nickname=BadCode --bot=walker
     ;;
   capacity)
     run server 17 --server --auth=dev --port="$PORT" --max-players=8 --report-at=11.5

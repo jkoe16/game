@@ -18,6 +18,8 @@ var _look_label: Label
 var _account_label: Label
 var _logout_btn: Button
 var _link_btn: Button
+var _room: LineEdit
+var _room_note: Label
 
 
 func _ready() -> void:
@@ -77,11 +79,42 @@ func _ready() -> void:
 	look.add_child(_small_button("모자", func() -> void: _hat = (_hat + 1) % Appearance.HATS.size(); _refresh_look()))
 	_refresh_look()
 
-	box.add_child(_big_button("연습 모드 (오프라인 광장)", func() -> void: offline_requested.emit(_nick.text.strip_edges())))
-	box.add_child(_big_button("장애물 레이스 바로 연습", func() -> void: practice_requested.emit(_nick.text.strip_edges(), "obstacle_race")))
-	# 온라인 서버(config/online.cfg)가 있으면 "친구들과 온라인"을 가장 눈에 띄게
+	# 온라인 서버(config/online.cfg)가 있으면: 방 만들기 / 코드로 입장 / 공개 광장
 	if online_url != "":
-		box.add_child(_big_button("친구들과 온라인 플레이", func() -> void: join_requested.emit(_nick.text.strip_edges(), online_url)))
+		var room_row := HBoxContainer.new()
+		room_row.add_theme_constant_override("separation", 8)
+		box.add_child(room_row)
+		var make := _big_button("방 만들기", func() -> void:
+			join_requested.emit(_nick.text.strip_edges(), OnlineConfig.room_url(online_url, OnlineConfig.new_room_code())))
+		make.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		room_row.add_child(make)
+		_room = LineEdit.new()
+		_room.placeholder_text = "방 코드"
+		_room.max_length = 8
+		_room.custom_minimum_size = Vector2(120, 64)
+		_room.add_theme_font_size_override("font_size", 24)
+		_room.alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_room.text_submitted.connect(func(_t: String) -> void: _join_room(online_url))
+		room_row.add_child(_room)
+		var enter := _big_button("입장", func() -> void: _join_room(online_url))
+		enter.custom_minimum_size = Vector2(90, 64)
+		room_row.add_child(enter)
+		_room_note = Label.new()
+		_room_note.text = "방을 만들면 나오는 코드를 친구에게 알려 주세요"
+		_room_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_room_note.add_theme_font_size_override("font_size", 15)
+		_room_note.add_theme_color_override("font_color", Color(0.4, 0.4, 0.5))
+		box.add_child(_room_note)
+		box.add_child(_big_button("공개 광장 입장 (누구나)", func() -> void: join_requested.emit(_nick.text.strip_edges(), online_url)))
+	var practice := HBoxContainer.new()
+	practice.add_theme_constant_override("separation", 8)
+	box.add_child(practice)
+	var p1 := _big_button("혼자 연습", func() -> void: offline_requested.emit(_nick.text.strip_edges()))
+	p1.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	practice.add_child(p1)
+	var p2 := _big_button("레이스 연습", func() -> void: practice_requested.emit(_nick.text.strip_edges(), "obstacle_race"))
+	p2.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	practice.add_child(p2)
 	# 웹 브라우저는 ENet(UDP) 불가 → WebSocket(wss://) 주소로만 접속
 	if OS.has_feature("web"):
 		_addr.visible = false
@@ -95,6 +128,15 @@ func _ready() -> void:
 		return
 	box.add_child(_big_button("로컬 서버 열고 접속", func() -> void: host_requested.emit(_nick.text.strip_edges())))
 	box.add_child(_big_button("서버 접속", func() -> void: join_requested.emit(_nick.text.strip_edges(), _addr.text.strip_edges())))
+
+
+func _join_room(online_url: String) -> void:
+	var code := OnlineConfig.normalize_room_code(_room.text)
+	if code == "":
+		_room_note.text = "방 코드는 영문/숫자 4~8자예요"
+		_room_note.add_theme_color_override("font_color", Color(0.85, 0.3, 0.35))
+		return
+	join_requested.emit(_nick.text.strip_edges(), OnlineConfig.room_url(online_url, code))
 
 
 func refresh_account() -> void:

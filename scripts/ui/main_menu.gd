@@ -20,6 +20,7 @@ var _logout_btn: Button
 var _link_btn: Button
 var _room: LineEdit
 var _room_note: Label
+var _notice: Label
 
 
 func _ready() -> void:
@@ -65,6 +66,14 @@ func _ready() -> void:
 	acc.add_child(_logout_btn)
 	refresh_account()
 
+	_notice = Label.new()
+	_notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_notice.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_notice.add_theme_font_size_override("font_size", 17)
+	_notice.add_theme_color_override("font_color", Color(0.85, 0.3, 0.35))
+	_notice.visible = false
+	box.add_child(_notice)
+
 	_nick = _field(box, "닉네임 (2~16자, 한글/영문/숫자/_)", "Player%d" % (randi() % 1000))
 	var online_url := OnlineConfig.server_url()
 	_addr = _field(box, "서버 주소 (예: 192.168.0.5:7777 또는 wss://주소)", online_url if online_url != "" else "127.0.0.1:%d" % NetConfig.DEFAULT_PORT)
@@ -101,6 +110,10 @@ func _ready() -> void:
 		room_row.add_child(enter)
 		_room_note = Label.new()
 		_room_note.text = "방을 만들면 나오는 코드를 친구에게 알려 주세요"
+		var invited := OnlineConfig.room_from_page()
+		if invited != "":
+			_room.text = invited
+			_room_note.text = "초대받은 방: %s → \"입장\"을 눌러 주세요" % invited
 		_room_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		_room_note.add_theme_font_size_override("font_size", 15)
 		_room_note.add_theme_color_override("font_color", Color(0.4, 0.4, 0.5))
@@ -128,6 +141,13 @@ func _ready() -> void:
 		return
 	box.add_child(_big_button("로컬 서버 열고 접속", func() -> void: host_requested.emit(_nick.text.strip_edges())))
 	box.add_child(_big_button("서버 접속", func() -> void: join_requested.emit(_nick.text.strip_edges(), _addr.text.strip_edges())))
+
+
+## 메뉴 위쪽에 안내 문구 (게임에서 나왔을 때 이유 등). 빈 문자열이면 숨김
+func show_notice(text: String) -> void:
+	if _notice:
+		_notice.text = text
+		_notice.visible = text != ""
 
 
 func _join_room(online_url: String) -> void:

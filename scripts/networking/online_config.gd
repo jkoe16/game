@@ -52,3 +52,24 @@ static func room_from_url(url: String) -> String:
 	if i < 0 or not (url.begins_with("ws://") or url.begins_with("wss://")):
 		return ""
 	return url.substr(i + 3).get_slice("/", 0)
+
+
+## 초대 링크: 웹이면 지금 페이지 주소, 아니면 config/online.cfg 의 web_url (기본 game-28f1b.web.app)
+static func invite_link(code: String) -> String:
+	var base := ""
+	if OS.has_feature("web"):
+		base = str(JavaScriptBridge.eval("location.origin + location.pathname", true))
+	if base == "" or base == "null":
+		var cf := ConfigFile.new()
+		base = "https://game-28f1b.web.app/"
+		if cf.load(PATH) == OK:
+			base = str(cf.get_value("online", "web_url", base))
+	return base + "?room=" + code
+
+
+## 웹 주소의 ?room=코드 (초대 링크로 들어온 경우). 없으면 ""
+static func room_from_page() -> String:
+	if not OS.has_feature("web"):
+		return ""
+	var v: Variant = JavaScriptBridge.eval("new URLSearchParams(location.search).get('room') || ''", true)
+	return normalize_room_code(str(v)) if v != null else ""

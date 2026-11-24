@@ -65,8 +65,19 @@ func _input(event: InputEvent) -> void:
 		_on_drag(event)
 
 
+## HUD 버튼(그룹 "touch_ui") 위를 누르면 조이스틱/카메라가 가져가지 않고 버튼에 넘긴다
+func _over_ui(pos: Vector2) -> bool:
+	for n in get_tree().get_nodes_in_group("touch_ui"):
+		var c := n as Control
+		if c and c.is_visible_in_tree() and c.get_global_rect().has_point(pos):
+			return true
+	return false
+
+
 func _on_touch(e: InputEventScreenTouch) -> void:
 	var v := _view()
+	if e.pressed and _over_ui(e.position):
+		return
 	if e.pressed:
 		if e.position.distance_to(_jump_center()) <= BUTTON_RADIUS:
 			if controller:

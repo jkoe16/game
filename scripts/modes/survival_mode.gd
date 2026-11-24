@@ -6,7 +6,7 @@ extends GameMode
 
 const LIVES := 2
 ## 단계 안내 (라운드 시작 후 초)
-const STAGE_TIMES := [25, 55, 85]
+const STAGE_TIMES := [27, 55, 72]
 
 var _started_with := 0
 var _stage := 0
@@ -23,7 +23,7 @@ func title() -> String:
 	return "최후의 생존자"
 
 func rules_text() -> String:
-	return "빨간 낮은 막대는 점프로 넘고, 파란 높은 막대가 올 땐 점프하지 마요! 목숨 2개"
+	return "섬이 무너져요! 흔들리는 빨간 타일에서 피하고, 빨간 막대는 점프·파란 막대는 점프 금지! 목숨 2개"
 
 
 func _init_entry(e: Dictionary) -> void:
@@ -34,12 +34,18 @@ func _init_entry(e: Dictionary) -> void:
 func _on_round_start() -> void:
 	_started_with = playing_entries().size()
 	_stage = 0
+	(map as SurvivalArenaMap).crumble_start = round_start_tick
+	dirty = true
+
+
+func _on_reset() -> void:
+	(map as SurvivalArenaMap).crumble_start = 0
 
 
 func _mode_tick() -> void:
 	if _stage < STAGE_TIMES.size() and tick - round_start_tick >= STAGE_TIMES[_stage] * 60:
 		_stage += 1
-		announce(["막대가 빨라져요!", "더 빨라져요! 집중!", "최고 속도! 끝까지 버텨요"][_stage - 1])
+		announce(["섬 가장자리가 무너지기 시작해요!", "막대가 더 빨라져요! 집중!", "안쪽 타일도 무너져요! 가운데로!"][_stage - 1])
 
 
 func on_fell(peer_id: int) -> Vector3:
@@ -59,18 +65,19 @@ func on_fell(peer_id: int) -> Vector3:
 	return (map as SurvivalArenaMap).spectator_point() if is_out(peer_id) else map.get_spawn_point(0)
 
 
-## 다시 떨어질 때 막대 바로 앞에 놓이지 않게: 두 막대에서 가장 먼 쪽 스폰 지점
-func _safe_respawn(peer_id: int) -> Vector3:
-	var best := map.get_spawn_point(peer_id)
+## 다시 떨어질 때 막대 바로 앞이나 무너진 곳에 놓이지 않게: 가운데 원판 위, 두 막대에서 가장 먼 지점
+func _safe_respawn(_peer_id: int) -> Vector3:
+	var best := Vector3(0, 0.5, 3.0)
 	var best_d := -1.0
 	for i in 8:
-		var p := map.get_spawn_point(i)
+		var a := TAU * i / 8.0
+		var p := Vector3(sin(a) * 3.2, 0.5, cos(a) * 3.2)
 		var d := INF
 		for s in map.sweepers:
-			var a := map.sweeper_angle(s, tick + 30) - atan2(p.x, p.z)
-			d = minf(d, absf(wrapf(a, -PI, PI)))
+			var da := map.sweeper_angle(s, tick + 30) - atan2(p.x, p.z)
+			d = minf(d, absf(wrapf(da, -PI, PI)))
 			if s["arms"] == 2:
-				d = minf(d, absf(wrapf(a + PI, -PI, PI)))
+				d = minf(d, absf(wrapf(da + PI, -PI, PI)))
 		if d > best_d:
 			best_d = d
 			best = p
@@ -116,4 +123,4 @@ func _is_win(e: Dictionary, _rank: int) -> bool:
 
 
 func _extra_state() -> Dictionary:
-	return {"alive": _alive()}
+	return {"alive": _alive(), "crumble": (map as SurvivalArenaMap).crumble_start}

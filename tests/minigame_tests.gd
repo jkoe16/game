@@ -16,6 +16,7 @@ static func run(runner: Object) -> void:
 	test_sweeper_speed_cap()
 	test_survival_lives()
 	test_treasure_rules()
+	await test_crumbling_island()
 
 
 ## 모드 규칙 단위 테스트용 가짜 서버 (위치 고정, 알림 기록)
@@ -231,3 +232,29 @@ static func test_world_determinism() -> void:
 		await t.process_frame
 	t.check((results[0][0] as Vector3).distance_to(results[1][0]) < 0.001, "obstacle course simulation is deterministic", "%s vs %s" % [results[0][0], results[1][0]])
 
+
+
+## 무너지는 섬: 시작 전엔 그대로, 30초 뒤 바깥 타일부터 떨어지고, 가운데는 끝까지 남는다. 다음 판엔 복구
+static func test_crumbling_island() -> void:
+	var map := MapRegistry.instantiate("survival_arena") as SurvivalArenaMap
+	t.root.add_child(map)
+	await t.process_frame
+	var outer := Vector3(sin(TAU * 0.5 / 16) * 9.6, 0, cos(TAU * 0.5 / 16) * 9.6)
+	map.update_world(5000)
+	t.check(map.is_solid_at(outer) and map.tiles.all(func(x: Dictionary) -> bool: return not x["fallen"]), "island intact before round")
+	map.crumble_start = 1000
+	map.update_world(1000 + 29 * 60)
+	t.check(map.tiles.all(func(x: Dictionary) -> bool: return not x["fallen"]), "nothing falls in first 29s")
+	map.update_world(1000 + 120 * 60)
+	var fallen := map.tiles.filter(func(x: Dictionary) -> bool: return x["fallen"]).size()
+	t.check(fallen == 16 + 6, "all outer tiles and half the inner ring fall by 120s", str(fallen))
+	t.check(map.is_solid_at(Vector3(2, 0, 2)) and not map.is_solid_at(Vector3(0, 0, 10)), "core stays, edge is gone")
+	# 실제로 무너진 자리에 서면 떨어진다
+	var p := _body(map, Vector3(0, 0.5, 9.6))
+	await _run_ticks(map, [p], 1000 + 120 * 60, 40, func(_i: int) -> PlayerInput: return _inp(0, 0))
+	t.check(p.global_position.y < -1.0, "player falls through a collapsed tile", str(p.global_position))
+	map.crumble_start = 0
+	map.update_world(9000)
+	t.check(map.tiles.all(func(x: Dictionary) -> bool: return not x["fallen"]), "tiles restored for next round")
+	map.queue_free()
+	await t.process_frame

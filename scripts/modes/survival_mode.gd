@@ -106,7 +106,7 @@ func _ranked() -> Array:
 
 func _score_text(e: Dictionary) -> String:
 	if e["status"] == "playing":
-		return ("생존! 목숨 %d" if phase != "playing" else "생존 중 · 목숨 %d") % int(e.get("lives", 0))
+		return "생존! 목숨 %d" % int(e.get("lives", 0))
 	return "%.1f초 버팀" % (e["out_tick"] / 60.0)
 
 

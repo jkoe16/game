@@ -9,24 +9,73 @@ var server_handler: Node = null
 var client_handler: Node = null
 
 
-func start_server(port: int, max_clients: int) -> Error:
-	var peer := ENetMultiplayerPeer.new()
-	var err := peer.create_server(port, max_clients, NetConfig.ENET_CHANNELS)
-	if err != OK:
-		return err
+## transport: "enet" (UDP, PC 전용) | "ws" (WebSocket — 웹 브라우저도 접속 가능. 클라우드에선 게이트웨이가 wss로 감싼다)
+func start_server(port: int, max_clients: int, transport := "enet") -> Error:
+	var peer: MultiplayerPeer
+	if transport == "ws":
+		var ws := WebSocketMultiplayerPeer.new()
+		_tune_ws(ws)
+		var werr := ws.create_server(port)
+		if werr != OK:
+			return werr
+		peer = ws
+	else:
+		var en := ENetMultiplayerPeer.new()
+		var err := en.create_server(port, max_clients, NetConfig.ENET_CHANNELS)
+		if err != OK:
+			return err
+		peer = en
 	multiplayer.multiplayer_peer = peer
 	# 클라이언트가 서버를 경유해 다른 클라이언트에게 RPC를 보내는 기능 차단
 	(multiplayer as SceneMultiplayer).server_relay = false
 	return OK
 
 
+## address가 ws:// 또는 wss:// URL이면 WebSocket, 아니면 ENet(host + port)
 func start_client(address: String, port: int) -> Error:
+	if is_ws_url(address):
+		var ws := WebSocketMultiplayerPeer.new()
+		_tune_ws(ws)
+		var werr := ws.create_client(address)
+		if werr != OK:
+			return werr
+		multiplayer.multiplayer_peer = ws
+		return OK
 	var peer := ENetMultiplayerPeer.new()
 	var err := peer.create_client(address, port, NetConfig.ENET_CHANNELS)
 	if err != OK:
 		return err
 	multiplayer.multiplayer_peer = peer
 	return OK
+
+
+static func is_ws_url(address: String) -> bool:
+	return address.begins_with("ws://") or address.begins_with("wss://")
+
+
+## "wss://host:port/path" → "wss://host:port"
+static func ws_base(url: String) -> String:
+	var i := url.find("://")
+	if i < 0:
+		return url
+	var slash := url.find("/", i + 3)
+	return url if slash < 0 else url.substr(0, slash)
+
+
+## 서버 주소 문자열 → [host, port]. URL이면 host에 URL 전체, port=0
+static func parse_address(addr: String) -> Array:
+	addr = addr.strip_edges()
+	if is_ws_url(addr):
+		return [addr, 0]
+	var hp := addr.split(":")
+	return [hp[0], int(hp[1]) if hp.size() > 1 and hp[1].is_valid_int() else NetConfig.DEFAULT_PORT]
+
+
+func _tune_ws(ws: WebSocketMultiplayerPeer) -> void:
+	ws.handshake_timeout = 5.0
+	ws.inbound_buffer_size = 1 << 18
+	ws.outbound_buffer_size = 1 << 18
+	ws.max_queued_packets = 4096
 
 
 func stop() -> void:
@@ -39,6 +88,8 @@ func kick(peer_id: int) -> void:
 	var peer := multiplayer.multiplayer_peer
 	if peer is ENetMultiplayerPeer and peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED:
 		peer.disconnect_peer(peer_id)
+	elif peer is WebSocketMultiplayerPeer and is_peer_active(peer_id):
+		(peer as WebSocketMultiplayerPeer).disconnect_peer(peer_id)
 
 
 ## ENet의 기본 패킷 스로틀은 RTT 변동을 감지하면 unreliable 패킷을 확률적으로 버린다.
@@ -55,6 +106,11 @@ func disable_throttle(peer_id: int) -> void:
 ## 서버 전용: 해당 피어가 아직 연결 상태인지 (연결 종료 중인 피어에 전송하면 ENet 오류 발생)
 func is_peer_active(peer_id: int) -> bool:
 	var peer := multiplayer.multiplayer_peer
+	if peer is WebSocketMultiplayerPeer:
+		if not multiplayer.get_peers().has(peer_id):
+			return false
+		var wp: WebSocketPeer = (peer as WebSocketMultiplayerPeer).get_peer(peer_id)
+		return wp != null and wp.get_ready_state() == WebSocketPeer.STATE_OPEN
 	if not (peer is ENetMultiplayerPeer):
 		return false
 	var p: ENetPacketPeer = peer.get_peer(peer_id)

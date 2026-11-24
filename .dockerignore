@@ -1,0 +1,10 @@
+.git
+.godot
+build
+server/firebase/public
+server/firebase/.firebase
+tests/integration/out
+node_modules
+*service-account*.json
+*serviceAccount*.json
+*-firebase-adminsdk-*.json

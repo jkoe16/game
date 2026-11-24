@@ -1,0 +1,12 @@
+# Render 배포 설정 (server/cloud/README.md 참고). Render 대시보드 → New → Blueprint → 이 저장소 선택
+services:
+  - type: web
+    name: 3d-party-world
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter        # free(512MB)도 동작은 하지만 15분 동안 아무도 없으면 잠들고, 깨는 데 30초 이상 걸림
+    region: singapore
+    healthCheckPath: /healthz
+    envVars:
+      - key: PORT
+        value: "8080"

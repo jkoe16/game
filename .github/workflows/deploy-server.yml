@@ -1,0 +1,62 @@
+# 온라인 게임 서버를 Fly.io에 올린다 (PowerShell 없이 웹에서 실행)
+#
+# 준비 (한 번만):
+#   1. Fly.io 대시보드 → Tokens → 토큰 만들기 → 값 복사
+#   2. GitHub 저장소 → Settings → Secrets and variables → Actions → New repository secret
+#      이름: FLY_API_TOKEN / 값: 복사한 토큰
+# 실행: GitHub 저장소 → Actions → "온라인 서버 배포 (Fly.io)" → Run workflow
+name: 온라인 서버 배포 (Fly.io)
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_name:
+        description: "서버 앱 이름 (영어 소문자·숫자·-만, 전 세계에서 하나뿐인 이름)"
+        required: true
+        default: "jkoe16-party-world"
+
+concurrency:
+  group: deploy-server
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      APP: ${{ inputs.app_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 토큰 확인
+        run: |
+          if [ -z "$FLY_API_TOKEN" ]; then
+            echo "::error::FLY_API_TOKEN 비밀값이 없습니다. Settings → Secrets and variables → Actions 에서 추가하세요."
+            exit 1
+          fi
+          if ! echo "$APP" | grep -Eq '^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$'; then
+            echo "::error::앱 이름은 영어 소문자, 숫자, - 만 쓸 수 있어요: $APP"
+            exit 1
+          fi
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: 앱 만들기 (처음 한 번)
+        run: |
+          if flyctl status --app "$APP" > /dev/null 2>&1; then
+            echo "이미 있는 앱: $APP"
+          else
+            flyctl apps create "$APP" --org personal
+          fi
+
+      - name: 서버 올리기
+        # 서버 상태(접속자·방)는 메모리에 있으므로 반드시 머신 1대로 운영 (--ha=false)
+        run: flyctl deploy --remote-only --app "$APP" --ha=false --wait-timeout 600
+
+      - name: 결과
+        run: |
+          echo "## 서버 주소" >> "$GITHUB_STEP_SUMMARY"
+          echo "- 게임 접속 주소: \`wss://$APP.fly.dev\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- 상태 확인: https://$APP.fly.dev/healthz" >> "$GITHUB_STEP_SUMMARY"
+          sleep 10
+          curl -fsS "https://$APP.fly.dev/healthz" | head -c 300 || echo "(서버가 켜지는 중일 수 있어요. 잠시 후 위 주소를 열어 보세요)"

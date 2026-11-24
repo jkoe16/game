@@ -28,8 +28,9 @@ static func map_for(mode_id: String) -> String:
 	return MODES.get(mode_id, {}).get("map", "")
 
 
-## 같은 PC에서 모든 모드 서버를 띄울 때의 기본 경로표 (예: "obstacle_race=127.0.0.1:7781,...")
-static func default_routes(host := "127.0.0.1") -> Dictionary:
+## 같은 PC에서 모든 모드 서버를 띄울 때의 기본 경로표.
+## host를 비우면 ":7781" 형태 → 클라이언트가 "지금 접속한 서버와 같은 주소"의 다른 포트로 이동 (친구가 내 PC IP로 접속해도 동작)
+static func default_routes(host := "") -> Dictionary:
 	var r := {}
 	for id in MODES:
 		if id != "lobby":

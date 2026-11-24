@@ -64,7 +64,8 @@ func _ready() -> void:
 	refresh_account()
 
 	_nick = _field(box, "닉네임 (2~16자, 한글/영문/숫자/_)", "Player%d" % (randi() % 1000))
-	_addr = _field(box, "서버 주소", "127.0.0.1:%d" % NetConfig.DEFAULT_PORT)
+	var online_url := OnlineConfig.server_url()
+	_addr = _field(box, "서버 주소 (예: 192.168.0.5:7777 또는 wss://주소)", online_url if online_url != "" else "127.0.0.1:%d" % NetConfig.DEFAULT_PORT)
 
 	var look := HBoxContainer.new()
 	box.add_child(look)
@@ -78,15 +79,19 @@ func _ready() -> void:
 
 	box.add_child(_big_button("연습 모드 (오프라인 광장)", func() -> void: offline_requested.emit(_nick.text.strip_edges())))
 	box.add_child(_big_button("장애물 레이스 바로 연습", func() -> void: practice_requested.emit(_nick.text.strip_edges(), "obstacle_race")))
-	# 웹 브라우저는 ENet(UDP) 접속 불가 → 온라인 버튼 숨김 (WebSocket 서버는 추후)
+	# 온라인 서버(config/online.cfg)가 있으면 "친구들과 온라인"을 가장 눈에 띄게
+	if online_url != "":
+		box.add_child(_big_button("친구들과 온라인 플레이", func() -> void: join_requested.emit(_nick.text.strip_edges(), online_url)))
+	# 웹 브라우저는 ENet(UDP) 불가 → WebSocket(wss://) 주소로만 접속
 	if OS.has_feature("web"):
 		_addr.visible = false
-		var note := Label.new()
-		note.text = "웹 버전은 혼자 연습만 가능해요 (온라인은 PC 버전)"
-		note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		note.add_theme_font_size_override("font_size", 16)
-		note.add_theme_color_override("font_color", Color(0.4, 0.4, 0.5))
-		box.add_child(note)
+		if online_url == "":
+			var note := Label.new()
+			note.text = "온라인 서버가 아직 설정되지 않았어요 (혼자 연습만 가능)"
+			note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			note.add_theme_font_size_override("font_size", 16)
+			note.add_theme_color_override("font_color", Color(0.4, 0.4, 0.5))
+			box.add_child(note)
 		return
 	box.add_child(_big_button("로컬 서버 열고 접속", func() -> void: host_requested.emit(_nick.text.strip_edges())))
 	box.add_child(_big_button("서버 접속", func() -> void: join_requested.emit(_nick.text.strip_edges(), _addr.text.strip_edges())))

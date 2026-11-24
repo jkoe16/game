@@ -83,7 +83,9 @@ func _process(_delta: float) -> void:
 	else:
 		var count := client.remotes.size() + (1 if client.local_player else 0)
 		var corr := client.controller.corrections if client.controller else 0
-		_info.text = "플레이어 %d명 · 핑 %d ms · 서버 보정 %d회 · FPS %d" % [count, Net.get_rtt_ms(), corr, Engine.get_frames_per_second()]
+		var rtt := Net.get_rtt_ms()
+		var ping := "%d ms" % rtt if rtt >= 0 else "-"
+		_info.text = "플레이어 %d명 · 핑 %s · 서버 보정 %d회 · FPS %d" % [count, ping, corr, Engine.get_frames_per_second()]
 	_update_mode()
 
 

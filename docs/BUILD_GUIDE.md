@@ -36,6 +36,9 @@ cd /c/Users/User/Documents/gloveer
 | 미니게임 바로 연습 | `"$GODOT" --path . -- --offline=obstacle_race` (survival / racing / coop / party) |
 | 전용 서버 | `"$GODOT" --headless --path . -- --server --port=7777 --max-players=8` |
 | 서버에 접속 | `"$GODOT" --path . -- --connect=127.0.0.1:7777 --nickname=나` |
+| WebSocket 서버 (웹도 접속 가능) | `"$GODOT" --headless --path . -- --server --transport=ws --port=7777` |
+| WebSocket 서버에 접속 | `"$GODOT" --path . -- --connect=ws://127.0.0.1:7777 --nickname=나` |
+| 클라우드 게이트웨이 (서버 6개 + wss 한 포트) | `GODOT_BIN="$GODOT" GAME_DIR=. node server/cloud/gateway.js` → `ws://127.0.0.1:8080/` |
 
 **같은 PC에서 멀티플레이 확인**: 전용 서버를 띄운 뒤 클라이언트 창을 2개 이상 실행. 또는 메뉴의 "로컬 서버 열고 접속" (서버를 별도 프로세스로 자동 실행).
 
@@ -62,13 +65,20 @@ bash tests/integration/net_test.sh capacity
   - 예전 주소 https://jkoe16.github.io/game/ (`gh-pages` 브랜치)는 수동 갱신, 현재 갱신 안 함
 - 웹 제약
   - 렌더러는 Compatibility(WebGL2) 고정. 이 렌더러에서는 그림자 켠 방향광이 과노출되어 **해 그림자를 끔** (`GameMap.setup_environment`)
-  - 브라우저는 ENet(UDP) 불가 → 메뉴에 온라인 버튼 숨김, 오프라인 연습만. 온라인 웹 지원은 WebSocket/WebRTC 서버 필요 (미구현)
+  - 브라우저는 ENet(UDP) 불가 → WebSocket 서버(`server/cloud/`)로 접속. `config/online.cfg`의 `server_url`이 비어 있으면 오프라인 연습만
   - 브라우저는 OS 폰트 폴백이 없음 → 한글 폰트 `assets/ui/fonts/NanumGothic-Regular.ttf` (OFL) 를 프로젝트 기본 폰트로 지정
   - 로그인: 내보내기 때 `config/firebase.cfg`를 포함 (include_filter, git에도 포함됨)
   - 웹 Google 로그인: Firebase JS SDK 팝업 (`html/head_include`의 `window.pwGoogleSignIn`) → 배포 도메인이 Firebase 승인 도메인에 있어야 함 (`game-28f1b.web.app`은 기본 포함, `jkoe16.github.io` 추가 완료)
 
+### Windows (친구에게 보낼 실행 파일)
+- 프리셋 "Windows" (pck 내장, exe 하나). 템플릿: `windows_release_x86_64.exe`
+- 빌드: `"$GODOT" --headless --path . --export-release "Windows" build/windows/3DPartyWorld.exe`
+
+### 온라인 서버 (클라우드)
+- `Dockerfile` + `fly.toml` / `render.yaml`. 자세한 순서: [server/cloud/README.md](../server/cloud/README.md)
+
 ### 그 밖의 플랫폼 (Phase 9에서 구성 예정)- Windows/Linux 전용 서버: 내보내기 프리셋 "Dedicated Server" (리소스 → 서버용 비시각 리소스 제거) — 미구성
-- Windows/macOS 클라이언트, Android(APK/AAB), iOS(Xcode 프로젝트) — 미구성
+- macOS 클라이언트, Android(APK/AAB), iOS(Xcode 프로젝트) — 미구성
 - Android 키스토어, iOS 서명 인증서, 스토어 계정은 **사용자 승인/소유 필요**하므로 임의로 만들지 않음.
 
 ## 5. 폴더 안내

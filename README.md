@@ -3,7 +3,9 @@
 PC·모바일 크로스플레이 3D 온라인 파티 게임 (Godot 4.7, 전용 서버 방식).
 
 **웹에서 바로 해보기 (혼자 연습 · 게스트/이메일/Google 로그인): https://game-28f1b.web.app**
-— 브라우저 버전은 오프라인 연습만 가능 (광장 포털 → 미니게임 → 결과 → 광장). 온라인 멀티는 PC 버전.
+— 온라인 서버를 올리면 웹·PC·휴대폰 브라우저가 같은 광장에서 함께 플레이 (WebSocket). 서버가 없으면 혼자 연습만.
+
+**친구들과 플레이하기: [server/cloud/README.md](server/cloud/README.md)** (클라우드 서버 또는 내 PC가 서버)
 
 ## 새 컴퓨터에서 시작
 ```powershell
@@ -47,6 +49,8 @@ export GODOT="/c/Users/User/Desktop/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-s
 "$GODOT" --headless --path . -s res://tests/run_tests.gd   # 121개 단위/물리/인증/미니게임 테스트
 bash tests/integration/net_test.sh basic                     # 보안/동기화 통합 테스트
 bash tests/integration/net_test.sh capacity                  # 8인 정원 테스트
+bash tests/integration/net_test.sh ws                        # WebSocket(웹 접속 경로) 보안/동기화
+bash tests/integration/net_test.sh gateway                   # 클라우드 게이트웨이 → 포털 → 미니게임 → 로비
 bash tests/integration/net_test.sh auth                      # Firebase 인증 서버 (목 Firebase)
 bash tests/integration/net_test.sh authflow                  # 로그인 흐름 (목 Firebase)
 bash tests/integration/net_test.sh data                      # Firestore 프로필·규칙·서버 기록 (목)

@@ -89,7 +89,8 @@ func _build_model(color: Color, hat: String) -> void:
 	var limb_mat := _toon(color.darkened(0.12))
 	var eye_mat := _flat(Color(0.12, 0.1, 0.16))
 	var shine_mat := _flat(Color(1, 1, 1))
-	var cheek_mat := _toon(Color(1.0, 0.55, 0.62))
+	var cheek_mat := _flat(Color(1.0, 0.6, 0.66))
+	var mouth_mat := _flat(Color(0.35, 0.16, 0.2))
 
 	_rig = Node3D.new()
 	_rig.name = "Rig"
@@ -102,11 +103,17 @@ func _build_model(color: Color, hat: String) -> void:
 	var head := _part("Head")
 	_sphere(head, 0.46, Vector3.ZERO, Vector3(1, 0.92, 0.95), body_mat)
 	for side in [-1.0, 1.0]:
-		var eye := _sphere(head, 0.065, Vector3(0.15 * side, 0.04, 0.4), Vector3(1, 1.45, 0.6), eye_mat)
-		_sphere(eye, 0.022, Vector3(0.022, 0.03, 0.055), Vector3(1, 0.7, 1), shine_mat)  # 눈 하이라이트 (눈 로컬 좌표)
-		_sphere(head, 0.075, Vector3(0.27 * side, -0.09, 0.33), Vector3(1, 0.7, 0.4), cheek_mat)
-	_sphere(head, 0.035, Vector3(0, -0.1, 0.43), Vector3(1.4, 0.6, 0.5), eye_mat)
-	_build_hat(head, hat)
+		# 큰 눈 + 반짝임 두 개 (눈 로컬 좌표)
+		var eye := _sphere(head, 0.075, Vector3(0.155 * side, 0.03, 0.39), Vector3(1, 1.35, 0.6), eye_mat)
+		_sphere(eye, 0.028, Vector3(0.025, 0.032, 0.06), Vector3(1, 0.85, 1), shine_mat)
+		_sphere(eye, 0.012, Vector3(-0.02, -0.035, 0.065), Vector3.ONE, shine_mat)
+		# 볼터치: 눈 바로 아래 바깥쪽, 납작한 타원
+		_sphere(head, 0.07, Vector3(0.255 * side, -0.075, 0.345), Vector3(1.2, 0.65, 0.35), cheek_mat)
+	# 웃는 입: 작은 구슬을 호 모양으로
+	for i in 5:
+		var t := (i - 2) / 2.0
+		_sphere(head, 0.017, Vector3(t * 0.045, -0.09 - 0.022 * (1.0 - t * t), 0.43 - 0.01 * t * t), Vector3.ONE, mouth_mat)
+	_build_hat(head, hat, color)
 
 	for n in ["HandL", "HandR"]:
 		_sphere(_part(n), 0.13, Vector3.ZERO, Vector3.ONE, body_mat)
@@ -114,8 +121,36 @@ func _build_model(color: Color, hat: String) -> void:
 		_sphere(_part(n), 0.16, Vector3.ZERO, Vector3(1, 0.6, 1.3), limb_mat)
 
 
-func _build_hat(head: Node3D, hat: String) -> void:
+func _build_hat(head: Node3D, hat: String, color: Color) -> void:
 	match hat:
+		"cat":
+			var ear := _toon(color.darkened(0.05))
+			var inner := _toon(Color(1.0, 0.7, 0.76))
+			for side in [-1.0, 1.0]:
+				var e := _cylinder(head, 0.0, 0.16, 0.28, Vector3(0.25 * side, 0.4, 0.0), ear)
+				e.rotation_degrees = Vector3(-5, 0, -22 * side)
+				e.scale = Vector3(1, 1, 0.6)
+				var ie := _cylinder(e, 0.0, 0.1, 0.18, Vector3(0, -0.03, 0.09), inner)
+				ie.scale = Vector3(1, 1, 0.4)
+		"bunny":
+			var ear := _toon(color.lightened(0.1))
+			var inner := _toon(Color(1.0, 0.7, 0.76))
+			for side in [-1.0, 1.0]:
+				var e := _sphere(head, 0.09, Vector3(0.13 * side, 0.56, -0.02), Vector3(0.8, 2.4, 0.5), ear)
+				e.rotation_degrees.z = -10.0 * side
+				_sphere(e, 0.06, Vector3(0, 0, 0.04), Vector3(0.7, 0.9, 0.4), inner)
+		"flower":
+			var petal := _toon(Color(1.0, 0.95, 0.98))
+			var center := _toon(Color(1.0, 0.8, 0.3))
+			var pin := Node3D.new()
+			pin.position = Vector3(0.28, 0.3, 0.2)
+			pin.rotation_degrees = Vector3(-25, 35, -20)
+			pin.scale = Vector3.ONE * 1.35
+			head.add_child(pin)
+			for i in 5:
+				var ang := TAU * i / 5.0
+				_sphere(pin, 0.06, Vector3(sin(ang) * 0.07, cos(ang) * 0.07, 0), Vector3(1, 1, 0.45), petal)
+			_sphere(pin, 0.045, Vector3(0, 0, 0.02), Vector3(1, 1, 0.6), center)
 		"sprout":
 			var green := _toon(Color(0.4, 0.8, 0.35))
 			_cylinder(head, 0.02, 0.02, 0.16, Vector3(0, 0.48, 0), green)

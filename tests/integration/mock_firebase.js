@@ -93,7 +93,7 @@ function validProfile(f) {
   const int = (v, max) => v && v.integerValue !== undefined && Number(v.integerValue) >= 0 && Number(v.integerValue) < max;
   return keys.length === 2 && keys.includes("nickname") && keys.includes("appearance")
     && f.nickname.stringValue !== undefined && NICK_RE.test(f.nickname.stringValue)
-    && a && Object.keys(a).length === 2 && int(a.color, 8) && int(a.hat, 5);
+    && a && Object.keys(a).length === 2 && int(a.color, 12) && int(a.hat, 8);
 }
 function allowed(caller, op, col, id, newFields) {
   if (caller.admin) return true;                       // 서비스 계정은 규칙 우회

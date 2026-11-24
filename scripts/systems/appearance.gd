@@ -12,8 +12,15 @@ const BODY_COLORS: Array[Color] = [
 	Color(1.00, 0.62, 0.40),  # 귤
 	Color(0.95, 0.95, 0.95),  # 구름
 	Color(0.45, 0.45, 0.55),  # 먹구름
+	Color(0.95, 0.38, 0.45),  # 체리
+	Color(0.40, 0.86, 0.86),  # 소다
+	Color(0.66, 0.47, 0.36),  # 초코
+	Color(0.80, 0.94, 0.40),  # 라임
 ]
-const HATS: Array[String] = ["sprout", "none", "cap", "crown", "bow"]
+const COLOR_NAMES: Array[String] = ["딸기우유", "하늘", "바나나", "민트", "라벤더", "귤", "구름", "먹구름", "체리", "소다", "초코", "라임"]
+## 새 항목은 뒤에만 추가 (저장된 프로필이 인덱스로 가리킴). 개수를 바꾸면 server/firebase/firestore.rules 범위도 함께 수정
+const HATS: Array[String] = ["sprout", "none", "cap", "crown", "bow", "cat", "bunny", "flower"]
+const HAT_NAMES: Array[String] = ["새싹", "없음", "캡모자", "왕관", "리본", "고양이 귀", "토끼 귀", "꽃 핀"]
 const EMOTES: Array[String] = ["wave", "dance", "victory", "defeat"]
 
 

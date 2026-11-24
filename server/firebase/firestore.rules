@@ -26,8 +26,8 @@ service cloud.firestore {
         && d.appearance is map
         && d.appearance.keys().hasOnly(['color', 'hat'])
         && d.appearance.keys().hasAll(['color', 'hat'])
-        && d.appearance.color is int && d.appearance.color >= 0 && d.appearance.color < 8
-        && d.appearance.hat is int && d.appearance.hat >= 0 && d.appearance.hat < 5;
+        && d.appearance.color is int && d.appearance.color >= 0 && d.appearance.color < 12
+        && d.appearance.hat is int && d.appearance.hat >= 0 && d.appearance.hat < 8;
     }
 
     // 공개 프로필: 로그인한 누구나 읽기(친구 목록·대기실 표시), 본인만 쓰기

@@ -1,0 +1,26 @@
+# 온라인 서버 상태·버전 확인 (Render). Actions → "서버 상태 확인" → Run workflow
+name: 서버 상태 확인
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 서버 깨우고 상태 읽기
+        run: |
+          url=$(grep -o 'wss://[^"]*' config/online.cfg | sed 's#^wss://#https://#')
+          echo "서버: $url"
+          for i in $(seq 1 12); do
+            if out=$(curl -fsS --max-time 20 "$url/healthz"); then
+              echo "$out"
+              echo "## 서버 상태" >> "$GITHUB_STEP_SUMMARY"
+              echo '```' >> "$GITHUB_STEP_SUMMARY"; echo "$out" >> "$GITHUB_STEP_SUMMARY"; echo '```' >> "$GITHUB_STEP_SUMMARY"
+              echo "main 최신 커밋: ${GITHUB_SHA::7}" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            echo "깨우는 중... ($i)"; sleep 10
+          done
+          echo "::error::서버가 응답하지 않아요"; exit 1

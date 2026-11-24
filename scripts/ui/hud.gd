@@ -261,7 +261,7 @@ func _process(delta: float) -> void:
 		var corr := client.controller.corrections if client.controller else 0
 		var rtt := Net.get_rtt_ms()
 		var ping := "%d ms" % rtt if rtt >= 0 else "-"
-		_info.text = "핑 %s · 서버 보정 %d회 · FPS %d" % [ping, corr, Engine.get_frames_per_second()]
+		_info.text = "핑 %s · 서버 보정 %d회 · FPS %d · 버전 %s/서버 %s" % [ping, corr, Engine.get_frames_per_second(), BuildInfo.client_version(), client.server_version]
 	_update_mode()
 
 

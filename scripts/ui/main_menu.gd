@@ -57,6 +57,12 @@ func _ready() -> void:
 
 	var panel := PanelContainer.new()
 	col.add_child(panel)
+	var ver := Label.new()  # 업데이트 반영 확인용
+	ver.text = "버전 %s" % BuildInfo.client_version()
+	ver.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	ver.add_theme_font_size_override("font_size", 13)
+	ver.add_theme_color_override("font_color", Color(1, 1, 1, 0.7))
+	col.add_child(ver)
 
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 12)

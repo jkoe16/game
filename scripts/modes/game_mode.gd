@@ -89,6 +89,20 @@ func _on_reset() -> void:
 
 # ================================================================== 공통 흐름
 
+## 모든 참가자 화면 가운데 위에 알림 (HUD가 "!"로 시작하는 알림을 크게 띄운다)
+func announce(text: String) -> void:
+	for e in entries.values():
+		server.notify_player(e["peer_id"], "!" + text)
+
+
+## 첫 완주자가 나오면 남은 시간을 secs초로 줄인다 (나머지가 오래 기다리지 않게)
+func start_finish_timer(secs: int) -> void:
+	var end := tick + secs * 60
+	if end < phase_end_tick:
+		phase_end_tick = end
+		dirty = true
+		announce("첫 완주! %d초 안에 들어오세요" % secs)
+
 func on_player_joined(peer_id: int, nickname: String) -> Vector3:
 	var late := phase in ["playing", "results"] or (phase == "countdown")
 	entries[peer_id] = {"peer_id": peer_id, "nickname": nickname, "status": "late" if late else "waiting", "score": 0}

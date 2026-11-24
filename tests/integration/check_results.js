@@ -135,7 +135,7 @@ if (scenario === "minigames") {
     if (m === "obstacle_race") check(results.some(r => /완주|진행 ([1-9]\d|[5-9])%/.test(r.score)), `[obstacle_race] bots made real progress on the course`, s);
     if (m === "racing") check(results.some(r => /완주|[23]\/3/.test(r.score)), `[racing] a bot completed at least one lap`, s);
     if (m === "coop") check(results.some(r => /성공|[123]\/3/.test(r.score)), `[coop] team opened at least one gate`, s);
-    if (m === "party") check(results.some(r => /코인 [1-9]/.test(r.score)), `[party] coins were collected`, s);
+    if (m === "party") check(results.some(r => /[1-9]\d*점/.test(r.score)), `[party] treasure was collected`, s);
     if (m === "survival") check(results.some(r => /생존|버팀/.test(r.score)), `[survival] survival scored`, s);
     const corr = bots.map(c => c ? c.corrections : -1);
     console.log(`    [${m}] small corrections per bot: ${bots.map(c => c && c.small_corrections).join(", ")} (max ${bots.map(c => c && c.max_small_correction).join(", ")} m) · teleports: ${bots.map(c => c && c.teleports).join(", ")}`);

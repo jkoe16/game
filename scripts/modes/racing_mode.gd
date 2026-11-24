@@ -4,6 +4,11 @@ extends GameMode
 ## 부스트 패드·점프 패드 활용. 완주 순서로 순위.
 
 const LAPS := 3
+const FINISH_WINDOW := 25
+
+
+func _init() -> void:
+	round_ticks = 180 * 60
 
 
 func mode_id() -> String:
@@ -13,7 +18,7 @@ func title() -> String:
 	return "레이싱"
 
 func rules_text() -> String:
-	return "트랙 %d바퀴! 노란 부스트 패드를 밟으면 빨라져요" % LAPS
+	return "트랙 %d바퀴! 노란 부스트로 빨라지고, 초록 점프대로 벽을 넘어요" % LAPS
 
 
 func _init_entry(e: Dictionary) -> void:
@@ -34,6 +39,15 @@ func _mode_tick() -> void:
 				if e["lap"] >= LAPS:
 					e["status"] = "finished"
 					e["finish_tick"] = tick - round_start_tick
+					var n := entries.values().filter(func(x: Dictionary) -> bool: return x["status"] == "finished").size()
+					if n == 1:
+						start_finish_timer(FINISH_WINDOW)
+					else:
+						server.notify_player(e["peer_id"], "!완주! %d등" % n)
+				elif e["lap"] == LAPS - 1:
+					server.notify_player(e["peer_id"], "!마지막 바퀴!")
+				else:
+					server.notify_player(e["peer_id"], "!%d바퀴째" % (e["lap"] + 1))
 			e["next_cp"] = (e["next_cp"] + 1) % m.checkpoints.size()
 			dirty = true
 
@@ -74,5 +88,5 @@ func _score_text(e: Dictionary) -> String:
 	return "%d/%d 바퀴" % [mini(e["lap"] + 1, LAPS), LAPS]
 
 
-func _is_win(e: Dictionary, rank: int) -> bool:
-	return rank == 1 and e["status"] == "finished"
+func _is_win(e: Dictionary, _rank: int) -> bool:
+	return e["status"] == "finished"

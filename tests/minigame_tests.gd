@@ -12,6 +12,101 @@ static func run(runner: Object) -> void:
 	await test_mover_carry()
 	await test_pads()
 	await test_world_determinism()
+	await test_jump_buffer()
+	test_sweeper_speed_cap()
+	test_survival_lives()
+	test_treasure_rules()
+
+
+## 모드 규칙 단위 테스트용 가짜 서버 (위치 고정, 알림 기록)
+class FakeServer extends Node:
+	var pos := {}
+	var notes: Array = []
+	func get_player_pos(id: int) -> Vector3: return pos.get(id, Vector3(0, -100, 0))
+	func teleport_player(id: int, p: Vector3) -> void: pos[id] = p
+	func notify_player(_id: int, text: String) -> void: notes.append(text)
+	func transfer_all(_r: String, _t: String) -> void: pass
+
+
+## 착지 직전(0.1초 전)에 누른 점프도 착지하자마자 실행된다
+static func test_jump_buffer() -> void:
+	var map := MapRegistry.instantiate("coin_arena")
+	t.root.add_child(map)
+	var p := _body(map, Vector3(0, 0.5, 0))
+	var tk := await _run_ticks(map, [p], 0, 30, func(_i: int) -> PlayerInput: return _inp(0, 0))
+	tk = await _run_ticks(map, [p], tk, 1, func(_i: int) -> PlayerInput: return _inp(0, 0, true))
+	# 정점 지나 내려오다 땅에 닿기 직전 점프 입력
+	var pressed := false
+	var jumped_again := false
+	for i in 120:
+		var press := false
+		if not pressed and p.velocity.y < 0.0 and p.global_position.y < 0.35:
+			press = true
+			pressed = true
+		tk = await _run_ticks(map, [p], tk, 1, func(_i: int) -> PlayerInput: return _inp(0, 0, press))
+		if pressed and p.velocity.y > 5.0:
+			jumped_again = true
+			break
+	t.check(pressed and jumped_again, "jump pressed just before landing still jumps (buffer)")
+	map.queue_free()
+	await t.process_frame
+
+
+## 가속 막대는 최고 속도에서 멈춘다 (끝없이 빨라지지 않음)
+static func test_sweeper_speed_cap() -> void:
+	var map := GameMap.new()
+	map.add_sweeper(Vector3.ZERO, 5.0, 0.5, 55.0, 0.0, 5.0)
+	var s: Dictionary = map.sweepers[0]
+	var w := (map.sweeper_angle(s, 600 * 60 + 1) - map.sweeper_angle(s, 600 * 60)) * 60.0
+	t.check(absf(w - GameMap.MAX_SWEEP_OMEGA) < 0.01, "accelerating sweeper is capped at max speed", "%.3f rad/s" % w)
+	var a0 := map.sweeper_angle(s, 1000)
+	var a1 := map.sweeper_angle(s, 1001)
+	t.check(absf(a1 - a0) < 0.1, "sweeper angle is continuous")
+	map.free()
+
+
+static func test_survival_lives() -> void:
+	var map := MapRegistry.instantiate("survival_arena")
+	var srv := FakeServer.new()
+	var mode := ModeRegistry.create("survival") as SurvivalMode
+	mode.setup(srv, map, {"min_players": 2})
+	mode.on_player_joined(1, "A")
+	mode.on_player_joined(2, "B")
+	mode._begin_countdown()
+	mode.server_tick(mode.phase_end_tick)
+	t.check(mode.phase == "playing", "survival round starts")
+	var r1 := mode.on_fell(1)
+	t.check(r1 != Vector3.INF and mode.entries[1]["status"] == "playing" and mode.entries[1]["lives"] == 1, "first fall: back on stage with 1 life")
+	var r2 := mode.on_fell(1)
+	t.check(r2 == Vector3.INF and mode.entries[1]["status"] == "out", "second fall: out")
+	mode.server_tick(mode.tick + 1)
+	t.check(mode.phase == "results" and mode.last_results[0]["peer_id"] == 2 and mode.last_results[0]["win"], "last survivor wins")
+	mode.free()
+	map.free()
+	srv.free()
+
+
+static func test_treasure_rules() -> void:
+	var map := MapRegistry.instantiate("coin_arena")
+	var srv := FakeServer.new()
+	var mode := ModeRegistry.create("party") as PartyCoinsMode
+	mode.setup(srv, map, {"min_players": 1, "round_sec": 50})
+	mode.on_player_joined(1, "A")
+	mode._begin_countdown()
+	mode.server_tick(mode.phase_end_tick)
+	var gems := mode.coins.filter(func(c: Array) -> bool: return c[4] == 3)
+	t.check(gems.size() == 2 and mode.coins.size() == 16, "wave has 14 coins + 2 gems on platforms", str(mode.coins.size()))
+	srv.pos[1] = Vector3(gems[0][0], gems[0][1] - 0.8, gems[0][2])
+	mode.server_tick(mode.tick + 1)
+	t.check(mode.entries[1]["score"] == 3, "gem is worth 3 points", str(mode.entries[1]["score"]))
+	mode.server_tick(mode.round_start_tick + 30 * 60)
+	t.check(mode.coins.any(func(c: Array) -> bool: return c[4] == 5 and c[3] == 1), "golden star appears at 30s")
+	srv.pos[1] = Vector3(0, 1.2 - 0.8, 0)
+	mode.server_tick(mode.round_start_tick + 31 * 60)  # 남은 19초 = 보너스 타임, 별은 40초까지
+	t.check(mode.entries[1]["score"] == 3 + 10, "star in bonus time is worth 5×2", str(mode.entries[1]["score"]))
+	mode.free()
+	map.free()
+	srv.free()
 
 
 static func _inp(x: float, z: float, jump := false) -> PlayerInput:

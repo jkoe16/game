@@ -89,7 +89,7 @@ func _ready() -> void:
 	_toast_card.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_toast_card.visible = false
 	add_child(_toast_card)
-	_toast = _label(_toast_card, 19)
+	_toast = _label(_toast_card, 23)
 	_toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_toast.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
@@ -221,6 +221,10 @@ func show_toast(text: String, secs := 4.0) -> void:
 
 
 func set_status(text: String) -> void:
+	# 모드 알림("!"로 시작)은 위쪽에 크게 잠깐 띄운다
+	if text.begins_with("!"):
+		show_toast(text.substr(1), 3.5)
+		return
 	if _status:
 		_status.text = text
 
@@ -331,10 +335,14 @@ func _on_results(results: Array) -> void:
 		if int(r.get("peer_id", 0)) == client.my_id:
 			mine = r
 	var rank := int(mine.get("rank", 0))
-	if mine.get("win") or rank == 1:
+	if str(client.mode_state.get("mode", "")) == "coop":
+		_banner.text = "미션 성공!" if mine.get("win") else "아쉬워요! 다음엔 꼭"
+		_banner.add_theme_color_override("font_color", Color(0.4, 0.85, 0.6) if mine.get("win") else Color(0.55, 0.65, 1.0))
+		rank = 1 if mine.get("win") else 99  # 성공하면 색종이
+	elif rank == 1 and mine.get("win"):
 		_banner.text = "우승!"
 		_banner.add_theme_color_override("font_color", Color(1.0, 0.72, 0.2))
-	elif rank > 0 and rank <= 3:
+	elif rank > 0 and (rank <= 3 or mine.get("win")):
 		_banner.text = "%d위! 잘했어요" % rank
 		_banner.add_theme_color_override("font_color", Color(1.0, 0.55, 0.7))
 	elif rank > 0:

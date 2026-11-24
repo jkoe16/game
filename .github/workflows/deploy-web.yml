@@ -50,10 +50,11 @@ jobs:
           touch build/web/.nojekyll
 
       - name: GitHub Pages 배포
+        continue-on-error: true   # 실패해도 Firebase 배포는 진행
         run: |
           set -e
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           cd build/web
           git init -q -b gh-pages
           git add -A

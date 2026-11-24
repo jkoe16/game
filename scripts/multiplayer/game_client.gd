@@ -8,6 +8,9 @@ signal session_ended(reason: String)
 
 const PLAYER_SCENE := preload("res://scenes/player/player.tscn")
 const MAX_CONNECT_ATTEMPTS := 8
+## 클라우드(ws/wss) 서버: 무료 호스팅은 잠들어 있다가 깨어나는 데 최대 1분 → 2초 간격으로 약 90초까지 재시도
+const MAX_CONNECT_ATTEMPTS_CLOUD := 45
+const CLOUD_RETRY_SEC := 2.0
 
 var address := "127.0.0.1"
 var port := NetConfig.DEFAULT_PORT
@@ -99,7 +102,10 @@ func _connect() -> void:
 		session_ended.emit("connect_error")
 		return
 	var shown := address if Net.is_ws_url(address) else "%s:%d" % [address, port]
-	status_changed.emit("서버 접속 중... %s (%d/%d)" % [shown, _attempts, MAX_CONNECT_ATTEMPTS])
+	if Net.is_ws_url(address) and _attempts > 3:
+		status_changed.emit("서버를 깨우는 중이에요... 무료 서버는 최대 1분 걸려요 (%d초)" % int(_attempts * CLOUD_RETRY_SEC))
+	else:
+		status_changed.emit("서버 접속 중... %s (%d/%d)" % [shown, _attempts, _max_attempts()])
 
 
 func _on_connected() -> void:
@@ -154,9 +160,13 @@ func _forged_token() -> String:
 	]
 
 
+func _max_attempts() -> int:
+	return MAX_CONNECT_ATTEMPTS_CLOUD if Net.is_ws_url(address) else MAX_CONNECT_ATTEMPTS
+
+
 func _on_connection_failed() -> void:
-	if _attempts < MAX_CONNECT_ATTEMPTS and not welcomed:
-		get_tree().create_timer(0.5).timeout.connect(_connect)
+	if _attempts < _max_attempts() and not welcomed:
+		get_tree().create_timer(CLOUD_RETRY_SEC if Net.is_ws_url(address) else 0.5).timeout.connect(_connect)
 		return
 	status_changed.emit("서버에 연결할 수 없습니다.")
 	session_ended.emit("connection_failed")

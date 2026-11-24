@@ -4,7 +4,7 @@
 
 | 방법 | 친구가 하는 일 | 필요한 것 |
 |---|---|---|
-| **A. 클라우드 서버** (추천) | 웹 링크를 열거나 PC 버전으로 접속 (휴대폰 브라우저도 됨) | 클라우드 호스팅 계정 (Fly.io 약 월 $2~6, 쓰는 만큼) |
+| **A. 클라우드 서버** (추천) | 웹 링크를 열거나 PC 버전으로 접속 (휴대폰 브라우저도 됨) | Render 무료 계정 (카드 불필요) 또는 Fly.io (유료, 약 월 $2~6) |
 | **B. 내 PC가 서버** | PC 버전 `3DPartyWorld.exe` 실행 → 내 IP 입력 | 같은 와이파이면 바로 / 인터넷이면 공유기 포트포워딩 |
 
 ---
@@ -23,7 +23,22 @@
 - 로그인: `config/firebase.cfg`가 있으므로 서버는 Firebase 토큰을 검증한다 (게스트 로그인도 가능).
   플레이 기록 저장까지 하려면 서비스 계정 키를 비밀로 넣고 `GOOGLE_APPLICATION_CREDENTIALS`로 경로를 지정 (선택).
 
-### 1) Fly.io에 올리기 (추천, 한국과 가까운 도쿄 리전)
+### 1) Render에 무료로 올리기 (추천 · 카드 없이 웹에서만)
+1. https://render.com → **Get Started** → **GitHub로 가입**
+2. 대시보드 오른쪽 위 **New +** → **Blueprint**
+3. 저장소 목록에서 `jkoe16/game` 선택 (안 보이면 "Configure account"로 GitHub 저장소 접근 허용)
+4. `render.yaml`을 읽어 **3d-party-world** 서비스가 표시됨 → **Apply** (첫 빌드 5~10분)
+5. 서비스 화면 위쪽의 주소 `https://3d-party-world-xxxx.onrender.com` → 게임 주소는 **`wss://3d-party-world-xxxx.onrender.com`**
+6. 확인: 브라우저로 `https://...onrender.com/healthz` → `{"ok":true,...}`
+
+무료 요금제 제약: 15분 동안 아무도 없으면 서버가 잠들고, 다음 접속 때 깨어나는 데 30초~1분 걸려요.
+게임은 "서버를 깨우는 중이에요..."를 표시하며 약 90초까지 자동으로 다시 시도해요. CPU가 작아서 많은 인원(10명 이상)은 버벅일 수 있어요.
+
+### 2) Fly.io에 올리기 (유료, 잠들지 않고 빠름)
+**PowerShell 없이 (GitHub 웹에서)**: Fly.io 대시보드 → Tokens → 토큰 복사 → GitHub 저장소 Settings → Secrets and variables → Actions →
+`FLY_API_TOKEN` 추가 → Actions 탭 → "온라인 서버 배포 (Fly.io)" → **Run workflow**
+
+**PowerShell로**:
 1. https://fly.io 가입 (카드 등록 필요. 아무도 없을 땐 서버가 꺼지고 접속하면 켜져서 요금이 적음)
 2. flyctl 설치 (PowerShell):
    ```powershell
@@ -37,10 +52,6 @@
    ```
 4. 끝나면 주소가 나옵니다: `https://<앱이름>.fly.dev` → 게임에서 쓸 주소는 **`wss://<앱이름>.fly.dev`**
 5. 확인: 브라우저로 `https://<앱이름>.fly.dev/healthz` 를 열면 `{"ok":true,...}`
-
-### 2) Render에 올리기 (대안)
-Render 대시보드 → New → Blueprint → 이 GitHub 저장소 선택 (`render.yaml` 사용).
-free 요금제도 동작은 하지만 15분간 아무도 없으면 잠들고 깨는 데 30초 이상 걸려요. 주소: `wss://<서비스이름>.onrender.com`
 
 ### 3) 게임에 서버 주소 넣고 다시 배포
 1. `config/online.cfg` 의 `server_url` 을 채우기:

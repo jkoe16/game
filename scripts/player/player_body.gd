@@ -6,8 +6,9 @@ extends CharacterBody3D
 ## 결정론적으로 계산하므로 서버와 클라이언트 예측 결과가 같다.
 
 const WALK_SPEED := 6.5
-const ACCEL_GROUND := 50.0
-const DECEL_GROUND := 60.0
+const ACCEL_GROUND := 60.0
+## 멈출 때·반대로 돌 때 감속 (높을수록 얼음 위처럼 미끄러지지 않고 딱 선다)
+const DECEL_GROUND := 120.0
 const ACCEL_AIR := 18.0
 const STUN_FRICTION := 4.0
 const GRAVITY := 26.0
@@ -71,6 +72,9 @@ func simulate(input: PlayerInput, delta: float, world_tick := 0) -> void:
 		accel = STUN_FRICTION
 	elif on_floor:
 		accel = ACCEL_GROUND if move.length_squared() > 0.0001 else DECEL_GROUND
+		# 지금 움직이는 방향과 반대쪽으로 입력하면 브레이크처럼 빠르게 (방향 전환 때 미끄러짐 방지)
+		if move.length_squared() > 0.0001 and horiz.dot(move) < 0.0:
+			accel = DECEL_GROUND
 	else:
 		accel = ACCEL_AIR
 	var top_speed := WALK_SPEED * (BOOST_MULT if boost_time > 0.0 else 1.0)

@@ -229,12 +229,12 @@ func test_lobby_map_and_respawn() -> void:
 	await _ticks(92, [p], func(_t: int) -> PlayerInput: return _inp(0, -1))
 	check(p.global_position.y > 1.4, "climbs 0.2m stairs", str(p.global_position))
 
-	# 높은 턱(0.9m)은 자동으로 오르면 안 됨 (점프 필요)
-	p.teleport(Vector3(-6, 0.5, 11))
-	await _ticks(60, [p], func(_t: int) -> PlayerInput: return _inp(0, 1))
-	check(p.global_position.y < 0.3, "0.9m ledge is not auto-stepped", str(p.global_position))
-	await _ticks(40, [p], func(t: int) -> PlayerInput: return _inp(0, 1, t == 0))
-	check(p.global_position.y > 0.8, "0.9m ledge reachable by jumping", str(p.global_position))
+	# 높은 턱(분수대 가장자리 1.0m)은 자동으로 오르면 안 됨 (점프 필요)
+	p.teleport(Vector3(0, 0.5, 6))
+	await _ticks(60, [p], func(_t: int) -> PlayerInput: return _inp(0, -1))
+	check(p.global_position.y < 0.3, "1.0m ledge is not auto-stepped", str(p.global_position))
+	await _ticks(40, [p], func(t: int) -> PlayerInput: return _inp(0, -1, t == 0))
+	check(p.global_position.y > 0.9, "1.0m ledge reachable by jumping", str(p.global_position))
 
 	# 섬 밖으로 걸어나가 낙하 → kill_height 아래로 떨어지는지
 	p.teleport(Vector3(0, 0.5, 20))

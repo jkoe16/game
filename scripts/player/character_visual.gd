@@ -30,6 +30,12 @@ var _target_yaw := 0.0
 var _grounded := true
 var _air_timer := 0.0
 var _min_air_vy := 0.0
+var _eyes: Array[Node3D] = []
+var _blink_in := 2.5
+var _blink_t := -1.0
+var _shadow: MeshInstance3D
+var _shadow_mat: StandardMaterial3D
+static var _shadow_tex: GradientTexture2D
 
 
 func build(appearance: Dictionary) -> void:
@@ -37,6 +43,78 @@ func build(appearance: Dictionary) -> void:
 	var color: Color = Appearance.BODY_COLORS[a["color"]]
 	_build_model(color, Appearance.HATS[a["hat"]])
 	_build_animations()
+	_build_shadow()
+	_blink_in = randf_range(1.0, 4.0)
+
+
+## 발밑 원형 그림자: 모든 렌더러(웹 포함)에서 캐릭터가 땅에 붙어 있는 느낌과 점프 높이를 알려 준다
+func _build_shadow() -> void:
+	if _shadow_tex == null:
+		var g := Gradient.new()
+		g.set_color(0, Color(0.18, 0.14, 0.32, 0.55))
+		g.set_color(1, Color(0.18, 0.14, 0.32, 0.0))
+		g.add_point(0.55, Color(0.18, 0.14, 0.32, 0.38))
+		_shadow_tex = GradientTexture2D.new()
+		_shadow_tex.gradient = g
+		_shadow_tex.fill = GradientTexture2D.FILL_RADIAL
+		_shadow_tex.fill_from = Vector2(0.5, 0.5)
+		_shadow_tex.fill_to = Vector2(1.0, 0.5)
+		_shadow_tex.width = 64
+		_shadow_tex.height = 64
+	_shadow_mat = StandardMaterial3D.new()
+	_shadow_mat.albedo_texture = _shadow_tex
+	_shadow_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_shadow_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_shadow_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_shadow_mat.render_priority = -1
+	var pm := PlaneMesh.new()
+	pm.size = Vector2(1.3, 1.3)
+	_shadow = MeshInstance3D.new()
+	_shadow.mesh = pm
+	_shadow.material_override = _shadow_mat
+	_shadow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_shadow.top_level = true
+	add_child(_shadow)
+
+
+func _update_shadow() -> void:
+	if _shadow == null or not is_inside_tree():
+		return
+	var from := global_position + Vector3(0, 0.4, 0)
+	var q := PhysicsRayQueryParameters3D.create(from, from + Vector3(0, -30, 0), 1)
+	var body := get_parent() as CollisionObject3D
+	if body:
+		q.exclude = [body.get_rid()]
+	var hit := get_world_3d().direct_space_state.intersect_ray(q)
+	if hit.is_empty():
+		_shadow.visible = false
+		return
+	var h: float = from.y - 0.4 - hit["position"].y
+	_shadow.visible = true
+	_shadow.global_position = hit["position"] + Vector3(0, 0.03, 0)
+	var k := clampf(1.0 - h / 6.0, 0.35, 1.0)
+	_shadow.scale = Vector3(k, 1, k)
+	_shadow_mat.albedo_color = Color(1, 1, 1, k)
+
+
+## 2~5초마다 눈을 깜빡인다 (시각 전용)
+func _update_blink(delta: float) -> void:
+	if _eyes.is_empty():
+		return
+	if _blink_t >= 0.0:
+		_blink_t += delta
+		var k := absf(_blink_t / 0.07 - 1.0)  # 1 → 0 → 1
+		for e in _eyes:
+			e.scale.y = 1.35 * maxf(k, 0.08)
+		if _blink_t >= 0.14:
+			_blink_t = -1.0
+			for e in _eyes:
+				e.scale.y = 1.35
+	else:
+		_blink_in -= delta
+		if _blink_in <= 0.0:
+			_blink_t = 0.0
+			_blink_in = randf_range(2.0, 5.0)
 
 
 func _process(delta: float) -> void:
@@ -44,6 +122,8 @@ func _process(delta: float) -> void:
 		_target_yaw = source_body.facing_yaw
 		update_motion(source_body.velocity, source_body.is_on_floor(), delta)
 	rotation.y = lerp_angle(rotation.y, _target_yaw, 1.0 - exp(-18.0 * delta))
+	_update_blink(delta)
+	_update_shadow()
 
 
 func set_target_yaw(yaw: float) -> void:
@@ -105,6 +185,7 @@ func _build_model(color: Color, hat: String) -> void:
 	for side in [-1.0, 1.0]:
 		# 큰 눈 + 반짝임 두 개 (눈 로컬 좌표)
 		var eye := _sphere(head, 0.075, Vector3(0.155 * side, 0.03, 0.39), Vector3(1, 1.35, 0.6), eye_mat)
+		_eyes.append(eye)
 		_sphere(eye, 0.028, Vector3(0.025, 0.032, 0.06), Vector3(1, 0.85, 1), shine_mat)
 		_sphere(eye, 0.012, Vector3(-0.02, -0.035, 0.065), Vector3.ONE, shine_mat)
 		# 볼터치: 눈 바로 아래 바깥쪽, 납작한 타원

@@ -17,6 +17,7 @@ var _local_server_pids: Array[int] = []
 
 
 func _ready() -> void:
+	UiStyle.apply()
 	args = parse_args(OS.get_cmdline_user_args())
 	# 타이머는 분기(로그인 대기 등) 전에 등록해야 로그인 실패 시에도 테스트가 종료된다
 	if args.has("screenshot"):

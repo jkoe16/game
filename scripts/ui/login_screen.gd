@@ -13,19 +13,17 @@ var _buttons: Array[Button] = []
 
 func _ready() -> void:
 	layer = 10
-	var bg := ColorRect.new()
-	bg.color = Color(0.35, 0.6, 0.95) if mode == "login" else Color(0, 0, 0, 0.55)
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(bg)
+	if mode == "login":
+		add_child(MenuBackdrop.new())
+	else:
+		var bg := ColorRect.new()
+		bg.color = Color(0.12, 0.08, 0.25, 0.55)
+		bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+		add_child(bg)
 	var center := CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(center)
 	var panel := PanelContainer.new()
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(1, 1, 1, 0.95)
-	sb.set_corner_radius_all(28)
-	sb.set_content_margin_all(32)
-	panel.add_theme_stylebox_override("panel", sb)
 	center.add_child(panel)
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 12)
@@ -142,7 +140,7 @@ func _note(text: String) -> Label:
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	l.add_theme_font_size_override("font_size", 17)
-	l.add_theme_color_override("font_color", Color(0.4, 0.4, 0.5))
+	l.add_theme_color_override("font_color", UiStyle.INK_SOFT)
 	return l
 
 
@@ -153,12 +151,19 @@ func _button(text: String, cb: Callable, color: Color, expand := false, height :
 	b.add_theme_font_size_override("font_size", 22)
 	if expand:
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	for state in ["normal", "hover", "pressed", "disabled"]:
-		var s := StyleBoxFlat.new()
-		s.bg_color = color.lightened(0.1) if state == "hover" else (color.darkened(0.15) if state == "pressed" else (color.darkened(0.3) if state == "disabled" else color))
-		s.set_corner_radius_all(16)
+	# 공통 통통 버튼 모양에 색만 바꿈 (Google·게스트 등 버튼별 색 유지)
+	var base := ThemeDB.get_default_theme()
+	for state in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
+		var s := (base.get_stylebox(state, "Button") as StyleBoxFlat).duplicate() as StyleBoxFlat
+		if state == "hover":
+			s.bg_color = color.lightened(0.12)
+		elif state.ends_with("pressed"):
+			s.bg_color = color.darkened(0.08)
+		elif state == "normal":
+			s.bg_color = color
+		if state != "disabled":
+			s.border_color = color.darkened(0.22)
 		b.add_theme_stylebox_override(state, s)
-	b.add_theme_color_override("font_color", Color.WHITE)
 	b.pressed.connect(cb)
 	_buttons.append(b)
 	return b

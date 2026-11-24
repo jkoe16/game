@@ -1,8 +1,8 @@
 class_name LobbyPlazaMap
 extends GameMap
 ## 메인 로비 "하늘 위의 광장".
-## 이동 검증용 요소 포함: 경사로(20°), 계단(0.2m), 점프 발판, 낙하/리스폰(가장자리 밖).
-## 충돌 레이아웃(바닥·분수·경사로·계단·발판·포털 기둥·나무 줄기·벤치)은 서버와 같아야 하므로 위치를 바꾸지 않는다.
+## 이동 검증용 요소 포함: 경사로(20°), 계단(0.2m), 분수대 턱(1.0m), 낙하/리스폰(가장자리 밖).
+## 충돌 레이아웃(바닥·분수·경사로·계단·포털 기둥·나무 줄기·벤치)은 서버와 같아야 하므로 위치를 바꾸지 않는다.
 ## 장식은 모두 시각 전용(서버에서는 생성하지 않음).
 
 const GRASS := Color(0.46, 0.79, 0.42)
@@ -104,19 +104,6 @@ func _ready() -> void:
 		add_bush(Vector3(-14.8, 0, -9.0), 1.0)
 		add_bush(Vector3(-9.2, 0, -9.5), 0.9, Color(0.5, 0.8, 0.45))
 		add_tree(Vector3(-12, 1.6, -14.6), 2, 0.6, false)
-
-	# ---------------------------------------------------------------- 점프 발판 (단차 1.1m, 최대 점프 높이 ≈ 1.92m)
-	var hops := [Vector3(-6, 0.6, 14), Vector3(-9, 1.7, 17), Vector3(-12.5, 2.8, 19), Vector3(-16, 3.9, 20)]
-	var hop_colors := [Color(1.0, 0.72, 0.6), Color(1.0, 0.84, 0.5), Color(0.72, 0.9, 0.6), Color(0.7, 0.8, 1.0)]
-	for i in hops.size():
-		add_box(hops[i], Vector3(2.6, 0.6, 2.6), hop_colors[i])
-		if not is_headless:
-			add_mesh(cyl_mesh(1.0, 1.0, 0.04, 24), hops[i] + Vector3(0, 0.32, 0), hop_colors[i].lightened(0.3))
-	add_label(Vector3(-16, 6.2, 20), "점프 도전!", 72, Color(1.0, 0.92, 0.6))
-	if not is_headless:
-		var star := add_mesh(sphere_mesh(0.45, 16), Vector3(-16, 5.2, 20), glow_material(Color(1.0, 0.85, 0.3), 1.6))
-		star.set_meta("dynamic", true)
-		_bobbers.append({"node": star, "base": star.position, "amp": 0.25, "speed": 2.0, "phase": 1.0})
 
 	# ---------------------------------------------------------------- 게임 모드 포털
 	for i in MODE_PORTALS.size():

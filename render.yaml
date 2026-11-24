@@ -4,7 +4,7 @@ services:
     name: 3d-party-world
     runtime: docker
     dockerfilePath: ./Dockerfile
-    plan: starter        # free(512MB)도 동작은 하지만 15분 동안 아무도 없으면 잠들고, 깨는 데 30초 이상 걸림
+    plan: free           # 무료: 15분 동안 아무도 없으면 잠들고, 다음 접속 때 30초~1분 뒤 깨어남 (게임이 자동으로 기다렸다 접속)
     region: singapore
     healthCheckPath: /healthz
     envVars:

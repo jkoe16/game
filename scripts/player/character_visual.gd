@@ -8,6 +8,15 @@ extends Node3D
 
 const TOON_SHADER := preload("res://shaders/toon.gdshader")
 const EMOTE_INPUTS: Array[String] = ["wave", "dance", "victory", "defeat", "knockdown"]
+## 걷기·뛰기 클립 공통 길이 (같아야 섞일 때 발 박자가 맞는다)
+const GAIT_LEN := 0.4
+## 실제 한 걸음 주기(초): 걷기 / 뛰기
+const WALK_PERIOD := 0.44
+const RUN_PERIOD := 0.32
+## 블렌드 공간에서 걷기 클립 위치 (속도 / WALK_SPEED)
+const WALK_POINT := 0.45
+## 몸 돌리기 속도 (클수록 빨리 돈다. 20이면 90° 꺾을 때 약 0.15초에 거의 다 돈다)
+const TURN_SPEED := 20.0
 
 const REST := {
 	"Rig": Vector3(0, 0, 0),
@@ -121,9 +130,19 @@ func _process(delta: float) -> void:
 	if source_body:
 		_target_yaw = source_body.facing_yaw
 		update_motion(source_body.velocity, source_body.is_on_floor(), delta)
-	rotation.y = lerp_angle(rotation.y, _target_yaw, 1.0 - exp(-18.0 * delta))
+	rotation.y = lerp_angle(rotation.y, _target_yaw, 1.0 - exp(-TURN_SPEED * delta))
 	_update_blink(delta)
 	_update_shadow()
+
+
+## 걷기·뛰기 재생 속도: 서 있을 땐 1(숨쉬기 그대로), 걷기 지점까지는 걷기 박자,
+## 그 위로는 속도에 따라 걷기 박자 → 뛰기 박자로 매끄럽게 빨라진다.
+static func gait_time_scale(hs: float) -> float:
+	var walk_scale := GAIT_LEN / WALK_PERIOD
+	if hs <= WALK_POINT:
+		return lerpf(1.0, walk_scale, clampf(hs / WALK_POINT, 0.0, 1.0))
+	var t := clampf((hs - WALK_POINT) / (1.0 - WALK_POINT), 0.0, 1.0)
+	return GAIT_LEN / lerpf(WALK_PERIOD, RUN_PERIOD, t)
 
 
 func set_target_yaw(yaw: float) -> void:
@@ -135,6 +154,7 @@ func update_motion(vel: Vector3, grounded: bool, delta: float) -> void:
 		return
 	var hs := Vector2(vel.x, vel.z).length() / PlayerBody.WALK_SPEED
 	anim_tree.set("parameters/loco/blend_position", clampf(hs, 0.0, 1.0))
+	anim_tree.set("parameters/loco_speed/scale", gait_time_scale(hs))
 	anim_tree.set("parameters/air/blend_position", clampf(vel.y / 8.0, -1.0, 1.0))
 
 	if grounded:
@@ -317,8 +337,10 @@ func _build_animations() -> void:
 	lib.add_animation("RESET", _anim_reset())
 	lib.add_animation("idle", _anim_idle())
 	# 발걸음 폭을 이동 속도에 맞춰 크게 (작으면 몸이 스케이트 타듯 미끄러져 보임)
-	lib.add_animation("walk", _anim_gait(0.44, 0.2, 0.1, 0.06, 0.14, 4.0, 3.0))
-	lib.add_animation("run", _anim_gait(0.32, 0.3, 0.16, 0.10, 0.22, 12.0, 4.0))
+	# 걷기·뛰기 클립 길이를 같게 맞춰 섞일 때 두 발 위치가 엇갈리지 않게 하고,
+	# 실제 발걸음 빠르기(걷기 0.44초 → 뛰기 0.32초)는 update_motion에서 재생 속도로 조절한다.
+	lib.add_animation("walk", _anim_gait(GAIT_LEN, 0.2, 0.1, 0.06, 0.14, 4.0, 3.0))
+	lib.add_animation("run", _anim_gait(GAIT_LEN, 0.3, 0.16, 0.10, 0.22, 12.0, 4.0))
 	lib.add_animation("jump", _anim_jump())
 	lib.add_animation("fall", _anim_fall())
 	lib.add_animation("land", _anim_land())
@@ -340,9 +362,13 @@ func _build_animations() -> void:
 	loco.min_space = 0.0
 	loco.max_space = 1.0
 	loco.add_blend_point(_clip("idle"), 0.0, -1, "idle")
-	loco.add_blend_point(_clip("walk"), 0.45, -1, "walk")
+	loco.add_blend_point(_clip("walk"), WALK_POINT, -1, "walk")
 	loco.add_blend_point(_clip("run"), 1.0, -1, "run")
+	# 가중치가 0인 클립도 함께 시간을 흘려 걷기·뛰기 발 박자를 항상 맞춰 둔다
+	loco.sync = true
 	tree.add_node("loco", loco)
+	tree.add_node("loco_speed", AnimationNodeTimeScale.new())
+	tree.connect_node("loco_speed", 0, "loco")
 
 	var air := AnimationNodeBlendSpace1D.new()
 	air.add_blend_point(_clip("fall"), -1.0, -1, "fall")
@@ -354,7 +380,7 @@ func _build_animations() -> void:
 	state.add_input("air")
 	state.xfade_time = 0.12
 	tree.add_node("state", state)
-	tree.connect_node("state", 0, "loco")
+	tree.connect_node("state", 0, "loco_speed")
 	tree.connect_node("state", 1, "air")
 
 	var land := AnimationNodeOneShot.new()

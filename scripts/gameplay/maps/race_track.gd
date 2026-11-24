@@ -36,8 +36,12 @@ func _ready() -> void:
 	add_pad("boost", Vector3(16, 0, -8), Vector3(2.5, 0.3, 2))
 	add_pad("jump", Vector3(-5, 0, 31), Vector3(1.2, 0.3, 3.5), 11.0)
 	add_box(Vector3(0, 0.6, 31), Vector3(0.8, 1.2, 8), Color(1.0, 0.55, 0.45))  # 점프로 넘는 낮은 벽
+	# 남쪽 직선: 회전 막대(점프로 넘기) → 바로 뒤 부스터 = 위험을 넘으면 보상
+	add_sweeper(Vector3(4, 0, -31), 3.6, 0.5, 95.0, 0.0, 0.0, 1, 0.4, Color(0.45, 0.6, 1.0), true)
+	add_pad("boost", Vector3(-8, 0, -31), Vector3(2.0, 0.3, 2.5))
 	for i in 8:
 		spawn_points.append(Vector3(-18.5 + (i % 4) * 1.7, 0.5, -7.5 + (i / 4) * 1.8))
+	item_spawns = [Vector3(-16, 1.2, 20), Vector3(16, 1.2, -20), Vector3(10, 1.2, 31), Vector3(-16, 1.2, -24)]
 	_decorate()
 
 

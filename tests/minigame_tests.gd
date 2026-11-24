@@ -17,6 +17,8 @@ static func run(runner: Object) -> void:
 	test_survival_lives()
 	test_treasure_rules()
 	await test_crumbling_island()
+	test_items_and_events()
+	await test_shield_and_wind()
 
 
 ## 모드 규칙 단위 테스트용 가짜 서버 (위치 고정, 알림 기록)
@@ -26,6 +28,8 @@ class FakeServer extends Node:
 	func get_player_pos(id: int) -> Vector3: return pos.get(id, Vector3(0, -100, 0))
 	func teleport_player(id: int, p: Vector3) -> void: pos[id] = p
 	func notify_player(_id: int, text: String) -> void: notes.append(text)
+	var given: Array = []
+	func give_item(id: int, kind: String, secs: float) -> void: given.append([id, kind, secs])
 	func transfer_all(_r: String, _t: String) -> void: pass
 
 
@@ -33,17 +37,22 @@ class FakeServer extends Node:
 static func test_jump_buffer() -> void:
 	var map := MapRegistry.instantiate("coin_arena")
 	t.root.add_child(map)
-	var p := _body(map, Vector3(0, 0.5, 0))
+	var p := _body(map, Vector3(8, 0.5, -3))  # 가운데 회전 막대가 닿지 않는 곳
 	var tk := await _run_ticks(map, [p], 0, 30, func(_i: int) -> PlayerInput: return _inp(0, 0))
+	var ground := p.global_position.y
 	tk = await _run_ticks(map, [p], tk, 1, func(_i: int) -> PlayerInput: return _inp(0, 0, true))
 	# 정점 지나 내려오다 땅에 닿기 직전 점프 입력
 	var pressed := false
+	var hold_left := -1
 	var jumped_again := false
 	for i in 120:
 		var press := false
-		if not pressed and p.velocity.y < 0.0 and p.global_position.y < 0.35:
-			press = true
+		# 착지 직전(0.35m 위)에 누르면 컨트롤러가 그 뒤 JUMP_HOLD_TICKS틱 동안 점프 입력을 유지한다
+		if p.velocity.y < 0.0 and p.global_position.y < ground + 0.35:
 			pressed = true
+		if pressed:
+			hold_left = hold_left - 1 if hold_left > 0 else (PlayerBody.JUMP_HOLD_TICKS if hold_left == -1 else 0)
+			press = hold_left > 0
 		tk = await _run_ticks(map, [p], tk, 1, func(_i: int) -> PlayerInput: return _inp(0, 0, press))
 		if pressed and p.velocity.y > 5.0:
 			jumped_again = true
@@ -256,5 +265,62 @@ static func test_crumbling_island() -> void:
 	map.crumble_start = 0
 	map.update_world(9000)
 	t.check(map.tiles.all(func(x: Dictionary) -> bool: return not x["fallen"]), "tiles restored for next round")
+	map.queue_free()
+	await t.process_frame
+
+
+## 아이템 상자: 먹으면 효과, 일정 시간 뒤 다시 생김. 이벤트가 하나 정해짐
+static func test_items_and_events() -> void:
+	var map := MapRegistry.instantiate("race_course")
+	map._ready()
+	var srv := FakeServer.new()
+	var mode := ModeRegistry.create("obstacle_race")
+	mode.setup(srv, map, {"min_players": 1})
+	mode.on_player_joined(1, "A")
+	mode._begin_countdown()
+	mode.server_tick(mode.phase_end_tick)
+	t.check(mode.items.size() == 4 and mode.event != "", "round starts with 4 item boxes and a random event", "%d %s" % [mode.items.size(), mode.event])
+	var it: Array = mode.items[0]
+	srv.pos[1] = Vector3(it[0], it[1] - 0.8, it[2])
+	var before := srv.given.size()
+	mode.server_tick(mode.tick + 1)
+	t.check(srv.given.size() == before + 1 and mode.items[0][3] == 0, "touching a box gives an item and removes the box")
+	srv.pos[1] = Vector3(0, -100, 0)
+	mode.server_tick(mode.tick + mode.item_respawn_ticks + 1)
+	t.check(mode.items[0][3] == 1, "box comes back later")
+	mode.free()
+	map.free()
+	srv.free()
+
+
+## 보호막이면 막대에 맞아도 넘어지지 않음 / 돌풍은 밀어내지만 걸어서 버틸 수 있음
+static func test_shield_and_wind() -> void:
+	var map := MapRegistry.instantiate("survival_arena") as SurvivalArenaMap
+	t.root.add_child(map)
+	await t.process_frame
+	var p := _body(map, Vector3(0, 0.5, 3.0))
+	p.shield_time = 5.0
+	p.knock(Vector3(10, 5, 0), 0.7)
+	t.check(p.stun_time == 0.0 and p.velocity == Vector3.ZERO, "shield blocks knockdown")
+	p.shield_time = 0.0
+	p.knock(Vector3(10, 5, 0), 0.7)
+	t.check(p.stun_time > 0.0, "without shield, knockdown works")
+	p.teleport(Vector3(0, 0.5, 3.0))
+	map.crumble_start = 1000
+	var gust_tick := 1000 + int(SurvivalArenaMap.GUST_FIRST * 60) + 5
+	var w := map.gust_at(gust_tick)
+	t.check(w.length() > 2.0, "gust blows at 40s", str(w))
+	t.check(map.gust_at(gust_tick + 4 * 60) == Vector3.ZERO, "gust stops after 3s")
+	p.shield_time = 10.0  # 회전 막대에 맞아 결과가 흔들리지 않게
+	var start := p.global_position
+	await _run_ticks(map, [p], gust_tick, 60, func(_i: int) -> PlayerInput: return _inp(0, 0))
+	var drift := Vector2(p.global_position.x - start.x, p.global_position.z - start.z).length()
+	t.check(drift > 1.5, "standing still, the gust pushes you", "%.2f m" % drift)
+	p.teleport(Vector3(0, 0.5, 3.0))
+	p.shield_time = 10.0
+	var against := -w.normalized()
+	await _run_ticks(map, [p], gust_tick, 60, func(_i: int) -> PlayerInput: return _inp(against.x, against.z))
+	var moved := Vector2(p.global_position.x, p.global_position.z - 3.0).dot(Vector2(against.x, against.z))
+	t.check(moved > 0.5, "walking against the gust still makes progress", "%.2f m" % moved)
 	map.queue_free()
 	await t.process_frame

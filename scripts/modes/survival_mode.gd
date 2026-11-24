@@ -10,6 +10,7 @@ const STAGE_TIMES := [27, 55, 72]
 
 var _started_with := 0
 var _stage := 0
+var _gust_warned := -1
 
 
 func _init() -> void:
@@ -23,7 +24,7 @@ func title() -> String:
 	return "최후의 생존자"
 
 func rules_text() -> String:
-	return "섬이 무너져요! 흔들리는 빨간 타일에서 피하고, 빨간 막대는 점프·파란 막대는 점프 금지! 목숨 2개"
+	return "섬이 무너져요! 흔들리는 타일을 피하고, 돌풍엔 반대로 걸어 버텨요. 빨간 막대는 점프·파란 막대는 점프 금지! 목숨 2개"
 
 
 func _init_entry(e: Dictionary) -> void:
@@ -43,6 +44,11 @@ func _on_reset() -> void:
 
 
 func _mode_tick() -> void:
+	var m := map as SurvivalArenaMap
+	var g := m.next_gust_tick(tick)
+	if g > 0 and g - tick <= 120 and g != _gust_warned:
+		_gust_warned = g
+		announce("2초 뒤 돌풍! 바람 반대쪽으로 걸어요")
 	if _stage < STAGE_TIMES.size() and tick - round_start_tick >= STAGE_TIMES[_stage] * 60:
 		_stage += 1
 		announce(["섬 가장자리가 무너지기 시작해요!", "막대가 더 빨라져요! 집중!", "안쪽 타일도 무너져요! 가운데로!"][_stage - 1])

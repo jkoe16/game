@@ -17,7 +17,7 @@ func title() -> String:
 	return "장애물 레이스"
 
 func rules_text() -> String:
-	return "막대를 점프로 넘고 결승선까지! 떨어져도 체크포인트에서 다시 시작해요"
+	return "망치를 점프로 넘고 결승선까지! ? 상자는 속도·점프·보호막 아이템. 떨어져도 체크포인트에서 다시 시작"
 
 
 func _init_entry(e: Dictionary) -> void:

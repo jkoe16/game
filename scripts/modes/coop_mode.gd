@@ -24,7 +24,7 @@ func title() -> String:
 	return "협동 미션"
 
 func rules_text() -> String:
-	return "주황 발판 %d개를 동시에 밟고 1초 버티면 문이 열려요! 문 3개를 열면 성공" % required
+	return "주황 발판 %d개를 동시에 밟고 버티면 문이 열려요! 2·3번 방은 막대를 점프로 넘으며 버티기. 빨리 깰수록 보너스" % required
 
 
 func _on_round_start() -> void:
@@ -107,7 +107,14 @@ func _is_win(_e: Dictionary, _rank: int) -> bool:
 
 ## 협동: 순위 없이 모두 같은 보상
 func _xp_for(_rank: int, _n: int, win: bool) -> int:
-	return 60 if win else 25
+	if not win:
+		return 25 + stage * 5   # 연 문 개수만큼 조금씩
+	return 60 + (30 if _clear_tick < 90 * 60 else (15 if _clear_tick < 130 * 60 else 0))  # 빠른 클리어 팀 보너스
+
+
+## 협동은 서로 경쟁하지 않으므로 보호막·속도만
+func event_pool() -> Array:
+	return ["부스트 출발", "보호막 출발"]
 
 
 func _extra_state() -> Dictionary:

@@ -36,6 +36,9 @@ func _ready() -> void:
 	for i in 8:
 		var a := TAU * i / 8.0
 		spawn_points.append(Vector3(sin(a) * 4.0, 0.5, cos(a) * 4.0))
+	# 위험 구역: 가운데 황금 별 자리를 지키는 회전 막대 (점프로 넘기)
+	add_sweeper(Vector3.ZERO, 3.4, 0.5, 80.0, 0.0, 0.0, 1, 0.4, Color(1.0, 0.45, 0.5), true)
+	item_spawns = [Vector3(0, 1.2, -12), Vector3(12, 1.2, 0), Vector3(0, 1.2, 12), Vector3(-12, 1.2, 4)]
 	_decorate()
 
 
@@ -109,10 +112,22 @@ func _chest(p: Vector3, yaw: float) -> void:
 		add_mesh(cyl_mesh(0.14, 0.14, 0.05, 10), Vector3(-0.35 + k * 0.17, 0.74, 0.05 * (k % 2)), glow_material(Color(1.0, 0.82, 0.3), 1.3), Vector3.ZERO, Vector3.ONE, root)
 
 
-func random_coin_points(rng: RandomNumberGenerator, n: int) -> Array[Vector3]:
+## 숨겨진 전설 보물상자가 나타날 수 있는 곳 (동굴 안, 야자수 뒤, 높은 발판 구석, 바위 틈)
+const HIDDEN_SPOTS := [Vector3(-11.0, 1.0, -11.0), Vector3(13.2, 1.0, 13.2), Vector3(9.6, 4.0, 9.6), Vector3(13.2, 1.0, -12.0), Vector3(-13.2, 1.0, 13.2)]
+
+
+## 보물 배치. pattern: 0 = 흩뿌리기, 1 = 원형, 2 = 십자
+func random_coin_points(rng: RandomNumberGenerator, n: int, pattern := 0) -> Array[Vector3]:
 	var out: Array[Vector3] = []
 	for i in n:
 		var p := Vector3(rng.randf_range(-HALF + 2, HALF - 2), 1.0, rng.randf_range(-HALF + 2, HALF - 2))
+		if pattern == 1:
+			var a := TAU * i / n
+			p = Vector3(sin(a) * 9.0, 1.0, cos(a) * 9.0)
+		elif pattern == 2:
+			var arm := i % 4
+			var d := 3.0 + (i / 4) * 2.6
+			p = Vector3([d, -d, 0.0, 0.0][arm], 1.0, [0.0, 0.0, d, -d][arm])
 		for pl in platforms:
 			var d: Vector3 = (p - pl["center"]).abs()
 			if d.x <= 3.0 and d.z <= 3.0:
@@ -171,8 +186,12 @@ func apply_mode_state(state: Dictionary) -> void:
 			var v := int(c[4]) if c.size() > 4 else 1
 			if node.get_meta("value", 0) != v:
 				node.set_meta("value", v)
-				node.scale = Vector3.ONE * (1.0 if v == 1 else (1.5 if v == 3 else 2.2))
-				node.material_override = glow_material(Color(1.0, 0.8, 0.25) if v == 1 else (Color(0.45, 0.85, 1.0) if v == 3 else Color(1.0, 0.95, 0.4)), 1.15 if v == 1 else 1.8)
+				# 일반 금화 1 · 희귀 보석 3 · 황금 별 5 · 전설 보물상자 10
+				var look := {1: [1.0, Color(1.0, 0.8, 0.25), 1.15], 3: [1.5, Color(0.45, 0.85, 1.0), 1.8],
+					5: [2.2, Color(1.0, 0.95, 0.4), 1.8], 10: [2.6, Color(0.85, 0.5, 1.0), 2.4]}
+				var lk: Array = look.get(v, look[1])
+				node.scale = Vector3.ONE * lk[0]
+				node.material_override = glow_material(lk[1], lk[2])
 		else:
 			node.visible = false
 

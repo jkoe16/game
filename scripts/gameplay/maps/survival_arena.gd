@@ -36,7 +36,11 @@ func _ready() -> void:
 	for i in 8:
 		var a := TAU * i / 8.0 + 0.2
 		spawn_points.append(Vector3(sin(a) * 6.5, 0.5, cos(a) * 6.5))
+	for i in 4:  # 가운데 원판 위 아이템 (보호막으로 막대 버티기, 점프 강화로 높은 막대 넘기)
+		var a := TAU * (i + 0.5) / 4.0
+		item_spawns.append(Vector3(sin(a) * 3.2, 1.2, cos(a) * 3.2))
 	_decorate()
+	_build_wind_fx()
 
 
 ## 링 하나를 count개 타일로. 정해진 순서로 first_sec부터 gap초 간격으로 떨어진다. half면 절반만 떨어짐
@@ -66,6 +70,11 @@ func _build_ring(r_in: float, r_out: float, count: int, first_sec: float, gap: f
 
 func update_world(tick: int) -> void:
 	super.update_world(tick)
+	if _wind_fx:
+		var w := gust_at(tick)
+		_wind_fx.emitting = w != Vector3.ZERO
+		if w != Vector3.ZERO:
+			_wind_fx.direction = w.normalized()
 	var t := (tick - crumble_start) / 60.0 if crumble_start > 0 else -INF
 	for tl in tiles:
 		var fall_at: float = tl["fall_at"]
@@ -94,6 +103,65 @@ func update_world(tick: int) -> void:
 			body.position = base
 			body.visible = true
 			mi.material_override = toon_material(TILE_A if tiles.find(tl) % 2 == 0 else TILE_B)
+
+
+# ---------------------------------------------------------------- 밀어내는 바람
+## 40초부터 18초마다 3초 동안 한 방향으로 돌풍 (초속 2.6m 밀림, 걸어서 버틸 수 있음). 방향은 매번 바뀐다
+const GUST_FIRST := 40.0
+const GUST_EVERY := 18.0
+const GUST_LEN := 3.0
+const GUST_SPEED := 2.6
+var _wind_fx: CPUParticles3D
+
+
+## 해당 틱의 바람 (초속 벡터, 없으면 ZERO). 서버·클라이언트 같은 계산
+func gust_at(tick: int) -> Vector3:
+	if crumble_start <= 0:
+		return Vector3.ZERO
+	var t := (tick - crumble_start) / 60.0 - GUST_FIRST
+	if t < 0.0:
+		return Vector3.ZERO
+	var k := int(t / GUST_EVERY)
+	if t - k * GUST_EVERY >= GUST_LEN:
+		return Vector3.ZERO
+	var a := k * 2.4 + 0.6
+	return Vector3(cos(a), 0, sin(a)) * GUST_SPEED
+
+
+## 다음 돌풍이 시작하는 틱 (안내용)
+func next_gust_tick(tick: int) -> int:
+	if crumble_start <= 0:
+		return -1
+	var t := (tick - crumble_start) / 60.0 - GUST_FIRST
+	var k := 0 if t < 0.0 else int(t / GUST_EVERY) + 1
+	return crumble_start + int((GUST_FIRST + k * GUST_EVERY) * 60.0)
+
+
+func pre_move(body: PlayerBody, tick: int) -> void:
+	super.pre_move(body, tick)
+	var w := gust_at(tick)
+	if w != Vector3.ZERO and not body.frozen:
+		body.global_position += w / 60.0
+
+
+func _build_wind_fx() -> void:
+	if is_headless:
+		return
+	_wind_fx = CPUParticles3D.new()
+	_wind_fx.amount = 60
+	_wind_fx.lifetime = 1.2
+	_wind_fx.emitting = false
+	_wind_fx.mesh = cyl_mesh(0.03, 0.03, 1.4, 4)
+	_wind_fx.material_override = glow_material(Color(1, 1, 1), 1.0)
+	_wind_fx.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	_wind_fx.emission_box_extents = Vector3(12, 2, 12)
+	_wind_fx.gravity = Vector3.ZERO
+	_wind_fx.particle_flag_align_y = true
+	_wind_fx.initial_velocity_min = 9.0
+	_wind_fx.initial_velocity_max = 13.0
+	_wind_fx.spread = 4.0
+	_wind_fx.position = Vector3(0, 1.5, 0)
+	add_child(_wind_fx)
 
 
 ## 지금 서 있을 수 있는지 (무너지지 않은 바닥 위인지)

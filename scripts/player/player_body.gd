@@ -14,20 +14,23 @@ const GRAVITY := 26.0
 const MAX_FALL_SPEED := 40.0
 const JUMP_VELOCITY := 10.0
 const COYOTE_TIME := 0.1
-## 착지 직전에 누른 점프도 인정 (0.12초): 처음 하는 사람도 점프 타이밍이 덜 억울하다
-const JUMP_BUFFER := 0.12
+## 점프 입력 여유: 컨트롤러가 점프를 누른 뒤 이 틱 수(≈0.12초) 동안 점프 입력을 유지 → 착지 직전 입력도 인정
+const JUMP_HOLD_TICKS := 7
 const TURN_SPEED := 14.0
 const STEP_HEIGHT := 0.35
 const BOOST_MULT := 1.6
 
 var peer_id := 0
 var air_time := 0.0
-var jump_buffer := 0.0
 var facing_yaw := 0.0
 ## 넘어짐(넉백) 남은 시간: 이 동안 조작 불가
 var stun_time := 0.0
 ## 부스트 남은 시간: 최고 속도 BOOST_MULT배
 var boost_time := 0.0
+## 아이템: 점프 강화 / 보호막(넘어지지 않음) 남은 시간 (서버 스냅샷으로 동기화)
+var jump_boost_time := 0.0
+var shield_time := 0.0
+const JUMP_BOOST_MULT := 1.3
 ## 카운트다운 등에서 이동 금지 (모드가 설정)
 var frozen := false
 ## 서 있는 이동 발판 번호 (-1 = 없음). 다음 틱에 발판 이동량만큼 함께 움직인다.
@@ -50,16 +53,16 @@ func simulate(input: PlayerInput, delta: float, world_tick := 0) -> void:
 		world.pre_move(self, world_tick)
 
 	var move := input.get_move()
-	if input.jump:
-		jump_buffer = JUMP_BUFFER
-	var want_jump := jump_buffer > 0.0
-	jump_buffer = maxf(jump_buffer - delta, 0.0)
+	# 점프 입력 여유(착지 직전 입력 인정)는 입력 쪽(LocalPlayerController)에서 처리한다.
+	# 여기에 숨은 상태를 두면 서버 보정 후 다시 계산할 때 결과가 달라져 캐릭터가 미끄러진다.
+	var want_jump := input.jump
 	if frozen or stun_time > 0.0:
 		move = Vector2.ZERO
 		want_jump = false
-		jump_buffer = 0.0
 	stun_time = maxf(stun_time - delta, 0.0)
 	boost_time = maxf(boost_time - delta, 0.0)
+	jump_boost_time = maxf(jump_boost_time - delta, 0.0)
+	shield_time = maxf(shield_time - delta, 0.0)
 	var on_floor := is_on_floor()
 
 	var horiz := Vector2(velocity.x, velocity.z)
@@ -86,9 +89,8 @@ func simulate(input: PlayerInput, delta: float, world_tick := 0) -> void:
 		vy = maxf(vy - GRAVITY * delta, -MAX_FALL_SPEED)
 
 	if want_jump and air_time <= COYOTE_TIME:
-		vy = JUMP_VELOCITY
+		vy = JUMP_VELOCITY * (JUMP_BOOST_MULT if jump_boost_time > 0.0 else 1.0)
 		air_time = COYOTE_TIME + 0.001  # 코요테 구간 소진 → 공중 2단 점프 불가
-		jump_buffer = 0.0
 
 	if move.length_squared() > 0.0004:
 		facing_yaw = lerp_angle(facing_yaw, atan2(move.x, move.y), 1.0 - exp(-TURN_SPEED * delta))
@@ -135,6 +137,8 @@ func _try_step_up(motion: Vector3) -> bool:
 
 ## 넉백: 서버·클라이언트가 같은 조건에서 호출 (GameMap.post_move)
 func knock(impulse: Vector3, stun: float) -> void:
+	if shield_time > 0.0 and stun > 0.0:
+		return  # 보호막: 장애물에 맞아도 넘어지지 않음 (점프 패드 같은 stun 0 은 그대로)
 	velocity = impulse
 	stun_time = maxf(stun_time, stun)
 	air_time = COYOTE_TIME + 0.001
@@ -146,5 +150,7 @@ func teleport(pos: Vector3) -> void:
 	air_time = 0.0
 	stun_time = 0.0
 	boost_time = 0.0
+	jump_boost_time = 0.0
+	shield_time = 0.0
 	floor_mover = -1
 	reset_physics_interpolation()

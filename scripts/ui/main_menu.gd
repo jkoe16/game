@@ -24,43 +24,54 @@ var _notice: Label
 
 
 func _ready() -> void:
-	var bg := ColorRect.new()
-	bg.color = Color(0.35, 0.6, 0.95)
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(bg)
+	add_child(MenuBackdrop.new())
 
 	var center := CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(center)
 
-	var panel := PanelContainer.new()
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(1, 1, 1, 0.92)
-	sb.set_corner_radius_all(28)
-	sb.set_content_margin_all(32)
-	panel.add_theme_stylebox_override("panel", sb)
-	center.add_child(panel)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 14)
+	center.add_child(col)
 
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 14)
-	box.custom_minimum_size = Vector2(440, 0)
-	panel.add_child(box)
-
+	# 로고: 흰 테두리 + 그림자를 두른 큰 글자
 	var title := Label.new()
 	title.text = "3D PARTY WORLD"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 44)
-	title.add_theme_color_override("font_color", Color(0.95, 0.4, 0.55))
-	box.add_child(title)
+	title.add_theme_font_size_override("font_size", 56)
+	title.add_theme_color_override("font_color", Color(1.0, 0.45, 0.62))
+	title.add_theme_color_override("font_outline_color", Color.WHITE)
+	title.add_theme_constant_override("outline_size", 16)
+	title.add_theme_color_override("font_shadow_color", Color(0.3, 0.2, 0.55, 0.35))
+	title.add_theme_constant_override("shadow_offset_y", 6)
+	title.add_theme_constant_override("shadow_offset_x", 0)
+	col.add_child(title)
+	var sub := Label.new()
+	sub.text = "친구들과 함께하는 하늘 위 파티 게임"
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sub.add_theme_font_size_override("font_size", 19)
+	sub.add_theme_color_override("font_color", Color.WHITE)
+	sub.add_theme_color_override("font_outline_color", Color(0.35, 0.3, 0.6, 0.6))
+	sub.add_theme_constant_override("outline_size", 6)
+	col.add_child(sub)
+
+	var panel := PanelContainer.new()
+	col.add_child(panel)
+
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 12)
+	box.custom_minimum_size = Vector2(460, 0)
+	panel.add_child(box)
 
 	var acc := HBoxContainer.new()
 	box.add_child(acc)
 	_account_label = Label.new()
 	_account_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_account_label.add_theme_font_size_override("font_size", 18)
-	_account_label.add_theme_color_override("font_color", Color(0.3, 0.35, 0.5))
+	_account_label.add_theme_color_override("font_color", UiStyle.INK_SOFT)
 	acc.add_child(_account_label)
 	_link_btn = _small_button("계정 연결", func() -> void: link_requested.emit())
+	_link_btn.theme_type_variation = "AccentButton"
 	acc.add_child(_link_btn)
 	_logout_btn = _small_button("로그아웃", func() -> void: logout_requested.emit())
 	acc.add_child(_logout_btn)
@@ -100,12 +111,13 @@ func _ready() -> void:
 		_room = LineEdit.new()
 		_room.placeholder_text = "방 코드"
 		_room.max_length = 8
-		_room.custom_minimum_size = Vector2(120, 64)
+		_room.custom_minimum_size = Vector2(120, 62)
 		_room.add_theme_font_size_override("font_size", 24)
 		_room.alignment = HORIZONTAL_ALIGNMENT_CENTER
 		_room.text_submitted.connect(func(_t: String) -> void: _join_room(online_url))
 		room_row.add_child(_room)
 		var enter := _big_button("입장", func() -> void: _join_room(online_url))
+		enter.theme_type_variation = "AccentButton"
 		enter.custom_minimum_size = Vector2(90, 64)
 		room_row.add_child(enter)
 		_room_note = Label.new()
@@ -116,17 +128,21 @@ func _ready() -> void:
 			_room_note.text = "초대받은 방: %s → \"입장\"을 눌러 주세요" % invited
 		_room_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		_room_note.add_theme_font_size_override("font_size", 15)
-		_room_note.add_theme_color_override("font_color", Color(0.4, 0.4, 0.5))
+		_room_note.add_theme_color_override("font_color", UiStyle.INK_SOFT)
 		box.add_child(_room_note)
-		box.add_child(_big_button("공개 광장 입장 (누구나)", func() -> void: join_requested.emit(_nick.text.strip_edges(), online_url)))
+		var pub := _big_button("공개 광장 입장 (누구나)", func() -> void: join_requested.emit(_nick.text.strip_edges(), online_url))
+		pub.theme_type_variation = "AccentButton"
+		box.add_child(pub)
 	var practice := HBoxContainer.new()
 	practice.add_theme_constant_override("separation", 8)
 	box.add_child(practice)
 	var p1 := _big_button("혼자 연습", func() -> void: offline_requested.emit(_nick.text.strip_edges()))
 	p1.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	p1.theme_type_variation = "SecondaryButton"
 	practice.add_child(p1)
 	var p2 := _big_button("레이스 연습", func() -> void: practice_requested.emit(_nick.text.strip_edges(), "obstacle_race"))
 	p2.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	p2.theme_type_variation = "SecondaryButton"
 	practice.add_child(p2)
 	# 웹 브라우저는 ENet(UDP) 불가 → WebSocket(wss://) 주소로만 접속
 	if OS.has_feature("web"):
@@ -139,8 +155,18 @@ func _ready() -> void:
 			note.add_theme_color_override("font_color", Color(0.4, 0.4, 0.5))
 			box.add_child(note)
 		return
-	box.add_child(_big_button("로컬 서버 열고 접속", func() -> void: host_requested.emit(_nick.text.strip_edges())))
-	box.add_child(_big_button("서버 접속", func() -> void: join_requested.emit(_nick.text.strip_edges(), _addr.text.strip_edges())))
+	# PC 전용: 내 PC 서버 / 주소로 접속 (한 줄로)
+	var pc := HBoxContainer.new()
+	pc.add_theme_constant_override("separation", 8)
+	box.add_child(pc)
+	for spec in [["내 PC로 서버 열기", func() -> void: host_requested.emit(_nick.text.strip_edges())],
+			["주소로 접속", func() -> void: join_requested.emit(_nick.text.strip_edges(), _addr.text.strip_edges())]]:
+		var b := _big_button(spec[0], spec[1])
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.theme_type_variation = "SecondaryButton"
+		b.custom_minimum_size.y = 52
+		b.add_theme_font_size_override("font_size", 19)
+		pc.add_child(b)
 
 
 ## 메뉴 위쪽에 안내 문구 (게임에서 나왔을 때 이유 등). 빈 문자열이면 숨김
@@ -209,8 +235,8 @@ func _field(parent: Control, placeholder: String, value: String) -> LineEdit:
 func _big_button(text: String, cb: Callable) -> Button:
 	var b := Button.new()
 	b.text = text
-	b.custom_minimum_size = Vector2(0, 64)
-	b.add_theme_font_size_override("font_size", 24)
+	b.custom_minimum_size = Vector2(0, 62)
+	b.add_theme_font_size_override("font_size", 23)
 	b.pressed.connect(cb)
 	return b
 
@@ -218,6 +244,8 @@ func _big_button(text: String, cb: Callable) -> Button:
 func _small_button(text: String, cb: Callable) -> Button:
 	var b := Button.new()
 	b.text = text
-	b.custom_minimum_size = Vector2(80, 44)
+	b.custom_minimum_size = Vector2(80, 42)
+	b.add_theme_font_size_override("font_size", 17)
+	b.theme_type_variation = "SecondaryButton"
 	b.pressed.connect(cb)
 	return b

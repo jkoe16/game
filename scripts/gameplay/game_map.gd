@@ -8,6 +8,8 @@ extends Node3D
 @export var kill_height := -25.0
 
 var spawn_points: Array[Vector3] = []
+## 넓은 발판 아래에 바위층을 자동으로 붙인다 (시각 전용). 직접 꾸미는 맵은 false
+var auto_underside := true
 var is_headless := DisplayServer.get_name() == "headless"
 
 # ---- 동적 월드 (틱 번호로 결정론적으로 계산 → 서버/클라이언트 동기화 메시지 불필요)
@@ -30,7 +32,7 @@ func get_spawn_point(index: int) -> Vector3:
 	return spawn_points[posmod(index, spawn_points.size())]
 
 
-func add_box(pos: Vector3, size: Vector3, color: Color, rot_deg := Vector3.ZERO, collide := true) -> Node3D:
+func add_box(pos: Vector3, size: Vector3, color: Color, rot_deg := Vector3.ZERO, collide := true, show := true) -> Node3D:
 	var root := _make_root(collide)
 	root.position = pos
 	root.rotation_degrees = rot_deg
@@ -38,12 +40,28 @@ func add_box(pos: Vector3, size: Vector3, color: Color, rot_deg := Vector3.ZERO,
 		var shape := BoxShape3D.new()
 		shape.size = size
 		_add_shape(root, shape)
-	if not is_headless:
+	if not is_headless and show:
 		var mesh := BoxMesh.new()
 		mesh.size = size
 		_add_mesh(root, mesh, color)
+		if auto_underside and size.x >= 4.0 and size.z >= 4.0 and size.y <= 2.0 and rot_deg.length() < 0.1:
+			_box_underside(root, size, color)
 	add_child(root)
 	return root
+
+
+## 넓은 판 아래 층층이 좁아지는 바위 → 떠 있는 섬처럼
+func _box_underside(root: Node3D, size: Vector3, color: Color) -> void:
+	var rock := Color(0.74, 0.62, 0.6).lerp(color, 0.15)
+	var y := -size.y * 0.5
+	var k := 0.88
+	for i in 3:
+		var h := 0.9 + i * 0.5
+		var bm := BoxMesh.new()
+		bm.size = Vector3(size.x * k, h, size.z * k)
+		add_mesh(bm, Vector3(0, y - h * 0.5, 0), rock.darkened(0.07 * i), Vector3.ZERO, Vector3.ONE, root)
+		y -= h
+		k *= 0.7
 
 
 func add_cylinder(pos: Vector3, radius: float, height: float, color: Color, collide := true, segments := 48) -> Node3D:
@@ -61,6 +79,8 @@ func add_cylinder(pos: Vector3, radius: float, height: float, color: Color, coll
 		mesh.height = height
 		mesh.radial_segments = segments
 		_add_mesh(root, mesh, color)
+		if auto_underside and radius >= 4.0 and height <= 3.0:
+			add_island_underside(pos + Vector3(0, -height * 0.5, 0), radius * 0.97, radius * 0.9)
 	add_child(root)
 	return root
 
@@ -95,6 +115,246 @@ func add_label(pos: Vector3, text: String, size := 96, color := Color.WHITE) -> 
 	add_child(l)
 
 
+# ================================================================== 시각 전용 장식 (서버에서는 만들지 않음)
+
+## 메시 하나를 배치 (충돌 없음). mat가 Color면 카툰 재질
+func add_mesh(mesh: Mesh, pos: Vector3, mat: Variant, rot_deg := Vector3.ZERO, scl := Vector3.ONE, parent: Node3D = null) -> MeshInstance3D:
+	if is_headless:
+		return null
+	var mi := MeshInstance3D.new()
+	mi.mesh = mesh
+	mi.material_override = toon_material(mat) if mat is Color else mat
+	mi.position = pos
+	mi.rotation_degrees = rot_deg
+	mi.scale = scl
+	# 움직이지 않는 장식은 나중에 하나로 합친다 (_batch_static)
+	if mat is Color:
+		mi.set_meta("batch_color", mat)
+	elif mat is StandardMaterial3D:
+		mi.set_meta("batch_mat", mat)
+	(parent if parent else self).add_child(mi)
+	return mi
+
+
+## 성능: 맵을 다 만든 뒤, 움직이지 않는 장식 메시를 재질별로 하나의 메시로 합친다.
+## 카툰 색 메시들은 정점 색으로 묶어 1번, 발광 재질은 재질마다 1번 그리기로 줄어든다.
+## (조상 중 meta "dynamic"이 있는 노드 = 움직이는 장식은 제외)
+func _batch_static() -> void:
+	var groups := {}   # key → {mat, color(bool), shadow, items: [[mesh, xform, color]]}
+	var inv := global_transform.affine_inverse()
+	for mi in find_children("*", "MeshInstance3D", true, false):
+		if not (mi.has_meta("batch_color") or mi.has_meta("batch_mat")) or _is_dynamic(mi):
+			continue
+		var shadow: bool = mi.cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var key: String
+		var entry: Array
+		if mi.has_meta("batch_color"):
+			key = "toon/%s" % shadow
+			entry = [mi.mesh, inv * mi.global_transform, mi.get_meta("batch_color")]
+		else:
+			var m: Material = mi.get_meta("batch_mat")
+			key = "mat/%d/%s" % [m.get_instance_id(), shadow]
+			entry = [mi.mesh, inv * mi.global_transform, Color.WHITE]
+		if not groups.has(key):
+			groups[key] = {"mat": mi.get_meta("batch_mat") if mi.has_meta("batch_mat") else null, "shadow": shadow, "items": []}
+		groups[key]["items"].append(entry)
+		mi.queue_free()
+	for key in groups:
+		var g: Dictionary = groups[key]
+		var mesh := _merge_meshes(g["items"])
+		if mesh == null:
+			continue
+		var out := MeshInstance3D.new()
+		out.mesh = mesh
+		if g["mat"] == null:
+			var vm := ShaderMaterial.new()
+			vm.shader = preload("res://shaders/toon_vertex_color.gdshader")
+			out.material_override = vm
+		else:
+			out.material_override = g["mat"]
+		if not g["shadow"]:
+			out.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(out)
+
+
+func _is_dynamic(n: Node) -> bool:
+	while n and n != self:
+		if n.has_meta("dynamic"):
+			return true
+		n = n.get_parent()
+	return false
+
+
+static func _merge_meshes(items: Array) -> ArrayMesh:
+	var verts := PackedVector3Array()
+	var norms := PackedVector3Array()
+	var cols := PackedColorArray()
+	var idx := PackedInt32Array()
+	for it in items:
+		var mesh: Mesh = it[0]
+		var xf: Transform3D = it[1]
+		var col: Color = it[2]
+		var basis_n := xf.basis.inverse().transposed()
+		for s in mesh.get_surface_count():
+			var arr := mesh.surface_get_arrays(s)
+			var v: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+			var nn: PackedVector3Array = arr[Mesh.ARRAY_NORMAL]
+			var base := verts.size()
+			for i in v.size():
+				verts.append(xf * v[i])
+				norms.append((basis_n * nn[i]).normalized() if nn.size() == v.size() else Vector3.UP)
+				cols.append(col)
+			var ii = arr[Mesh.ARRAY_INDEX]
+			if ii == null or (ii as PackedInt32Array).is_empty():
+				for i in v.size():
+					idx.append(base + i)
+			else:
+				for i in (ii as PackedInt32Array):
+					idx.append(base + i)
+	if verts.is_empty():
+		return null
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_NORMAL] = norms
+	arrays[Mesh.ARRAY_COLOR] = cols
+	arrays[Mesh.ARRAY_INDEX] = idx
+	var am := ArrayMesh.new()
+	am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return am
+
+
+static func cyl_mesh(top: float, bottom: float, h: float, seg := 20) -> CylinderMesh:
+	var m := CylinderMesh.new()
+	m.top_radius = top
+	m.bottom_radius = bottom
+	m.height = h
+	m.radial_segments = seg
+	m.rings = 1
+	return m
+
+
+static func sphere_mesh(r: float, seg := 20) -> SphereMesh:
+	var m := SphereMesh.new()
+	m.radius = r
+	m.height = r * 2.0
+	m.radial_segments = seg
+	m.rings = maxi(6, seg / 2)
+	return m
+
+
+## 통통한 나무. style 0 = 둥근 활엽수, 1 = 뾰족 침엽수, 2 = 꽃나무(분홍). collide면 줄기에 충돌
+func add_tree(pos: Vector3, style := 0, size := 1.0, collide := true) -> void:
+	var trunk_h := 2.2 * size
+	if collide:
+		var root := _make_root(true)
+		root.position = pos + Vector3(0, trunk_h * 0.5, 0)
+		var shape := CylinderShape3D.new()
+		shape.radius = 0.35 * size
+		shape.height = trunk_h
+		_add_shape(root, shape)
+		add_child(root)
+	if is_headless:
+		return
+	var wood := Color(0.66, 0.45, 0.33)
+	add_mesh(cyl_mesh(0.22 * size, 0.38 * size, trunk_h, 10), pos + Vector3(0, trunk_h * 0.5, 0), wood)
+	match style:
+		1:
+			var g := Color(0.33, 0.68, 0.5)
+			for i in 3:
+				var r := (1.6 - i * 0.4) * size
+				add_mesh(cyl_mesh(0.05, r, 1.5 * size, 14), pos + Vector3(0, trunk_h + (0.4 + i * 0.95) * size, 0), g.lightened(i * 0.07))
+		_:
+			var leaf := Color(0.42, 0.78, 0.42) if style == 0 else Color(1.0, 0.7, 0.82)
+			var blobs := [[Vector3(0, 0.9, 0), 1.35], [Vector3(0.75, 0.55, 0.3), 0.95], [Vector3(-0.7, 0.6, -0.25), 0.9], [Vector3(0.1, 1.65, -0.1), 0.85], [Vector3(-0.2, 0.5, 0.8), 0.8]]
+			for i in blobs.size():
+				var b: Array = blobs[i]
+				add_mesh(sphere_mesh(b[1] * size, 16), pos + Vector3(0, trunk_h, 0) + b[0] * size, leaf.lightened(0.06 * (i % 3)))
+
+
+## 덤불 (구 3개 뭉치)
+func add_bush(pos: Vector3, size := 1.0, color := Color(0.4, 0.74, 0.42)) -> void:
+	if is_headless:
+		return
+	add_mesh(sphere_mesh(0.7 * size, 14), pos + Vector3(0, 0.35 * size, 0), color, Vector3.ZERO, Vector3(1.2, 0.8, 1.0))
+	add_mesh(sphere_mesh(0.5 * size, 12), pos + Vector3(0.6 * size, 0.25 * size, 0.2 * size), color.lightened(0.08))
+	add_mesh(sphere_mesh(0.45 * size, 12), pos + Vector3(-0.55 * size, 0.2 * size, -0.1 * size), color.darkened(0.05))
+
+
+## 꽃밭: 작은 꽃 여러 개를 MultiMesh 하나로 (그리기 호출 1번)
+func add_flowers(center: Vector3, radius: float, count: int, seed_val := 1) -> void:
+	if is_headless:
+		return
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_val
+	var colors := [Color(1.0, 0.62, 0.72), Color(1.0, 0.9, 0.45), Color(0.78, 0.66, 1.0), Color(1, 1, 1), Color(1.0, 0.7, 0.45)]
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
+	mm.mesh = sphere_mesh(0.13, 8)
+	mm.instance_count = count
+	for i in count:
+		var a := rng.randf() * TAU
+		var r := sqrt(rng.randf()) * radius
+		var p := center + Vector3(cos(a) * r, 0.12, sin(a) * r)
+		mm.set_instance_transform(i, Transform3D(Basis.from_scale(Vector3(1, 0.7, 1)), p))
+		mm.set_instance_color(i, colors[rng.randi() % colors.size()])
+	var mmi := MultiMeshInstance3D.new()
+	mmi.multimesh = mm
+	var mat := CharacterVisual._toon(Color.WHITE)
+	mat.shader = preload("res://shaders/toon_vertex_color.gdshader")
+	mmi.material_override = mat
+	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(mmi)
+
+
+## 푹신한 구름 (구 4개)
+func add_cloud(pos: Vector3, size := 1.0) -> void:
+	if is_headless:
+		return
+	var white := Color(1, 1, 1)
+	for b in [[Vector3.ZERO, 3.0], [Vector3(2.6, -0.4, 0.4), 2.2], [Vector3(-2.5, -0.5, -0.2), 2.0], [Vector3(0.6, 1.2, -0.3), 2.0]]:
+		var mi := add_mesh(sphere_mesh(b[1] * size, 14), pos + b[0] * size, white, Vector3.ZERO, Vector3(1, 0.75, 0.9))
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+
+## 가로등 (빛나는 등불, 실제 조명 없이 발광 재질만 → 성능 부담 없음)
+func add_lamp(pos: Vector3, glow := Color(1.0, 0.92, 0.65)) -> void:
+	if is_headless:
+		return
+	var metal := Color(0.45, 0.42, 0.6)
+	add_mesh(cyl_mesh(0.07, 0.1, 2.6, 8), pos + Vector3(0, 1.3, 0), metal)
+	add_mesh(cyl_mesh(0.22, 0.28, 0.18, 10), pos + Vector3(0, 0.09, 0), metal)
+	add_mesh(sphere_mesh(0.3, 14), pos + Vector3(0, 2.85, 0), glow_material(glow, 2.2))
+	add_mesh(cyl_mesh(0.02, 0.34, 0.22, 10), pos + Vector3(0, 3.22, 0), metal)
+
+
+static var _glow_cache := {}
+
+
+## 스스로 빛나는 재질 (unshaded). 글로우가 있는 렌더러에서는 은은하게 번진다
+static func glow_material(color: Color, energy := 1.5) -> StandardMaterial3D:
+	var key := "%s/%s" % [color.to_html(), energy]
+	if not _glow_cache.has(key):
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.albedo_color = color
+		m.emission_enabled = true
+		m.emission = color
+		m.emission_energy_multiplier = energy
+		_glow_cache[key] = m
+	return _glow_cache[key]
+
+
+## 떠 있는 섬의 아랫부분: 아래로 갈수록 좁아지는 바위층
+func add_island_underside(center: Vector3, top_radius: float, depth: float, rock := Color(0.66, 0.55, 0.52)) -> void:
+	if is_headless:
+		return
+	add_mesh(cyl_mesh(top_radius, top_radius * 0.72, depth * 0.35, 40), center + Vector3(0, -depth * 0.175, 0), rock)
+	add_mesh(cyl_mesh(top_radius * 0.72, top_radius * 0.38, depth * 0.4, 32), center + Vector3(0, -depth * 0.55, 0), rock.darkened(0.08))
+	add_mesh(cyl_mesh(top_radius * 0.38, 0.4, depth * 0.35, 24), center + Vector3(0, -depth * 0.925, 0), rock.darkened(0.16))
+
+
 func setup_environment(sky_top: Color, sky_horizon: Color, sun_rot_deg: Vector3) -> void:
 	if is_headless:
 		return
@@ -105,24 +365,82 @@ func setup_environment(sky_top: Color, sky_horizon: Color, sun_rot_deg: Vector3)
 	sky_mat.ground_bottom_color = sky_top.darkened(0.2)
 	var sky := Sky.new()
 	sky.sky_material = sky_mat
+	sky_mat.sky_curve = 0.12
+	sky_mat.sun_angle_max = 8.0
+	sky_mat.energy_multiplier = 1.05
+	var compat := RenderingServer.get_current_rendering_method() == "gl_compatibility"
 	var env := Environment.new()
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.45
-	env.ambient_light_sky_contribution = 0.7
+	env.ambient_light_energy = 0.4
+	env.ambient_light_sky_contribution = 0.65
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	env.tonemap_white = 1.2
+	env.tonemap_exposure = 0.9
+	# 공간감: 멀리 있는 것일수록 하늘색에 녹아드는 옅은 안개 (모든 렌더러 지원, 비용 거의 없음)
+	env.fog_enabled = true
+	env.fog_light_color = sky_horizon.lerp(sky_top, 0.25)
+	# 거리 기반 안개: 가까운 곳(40m 이내)은 선명하게, 먼 섬·구름만 하늘빛으로
+	env.fog_mode = Environment.FOG_MODE_DEPTH
+	env.fog_depth_begin = 40.0
+	env.fog_depth_end = 170.0
+	env.fog_depth_curve = 1.6
+	env.fog_density = 0.55
+	env.fog_sky_affect = 0.0
+	# 파스텔 색감: 채도 살짝 올리고 은은한 빛번짐
+	env.adjustment_enabled = true
+	env.adjustment_saturation = 1.15
+	env.adjustment_contrast = 1.04
+	env.glow_enabled = not compat
+	env.glow_intensity = 0.35
+	env.glow_bloom = 0.05
+	env.glow_hdr_threshold = 1.1
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
 
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = sun_rot_deg
-	sun.light_energy = 0.95
+	sun.light_energy = 1.0
+	sun.light_color = Color(1.0, 0.97, 0.9)
 	# Compatibility 렌더러(웹·저사양 폴백)에서 그림자 켠 방향광 + 커스텀 light()가 과노출(전부 흰색)됨 → 그림자 끔
-	sun.shadow_enabled = RenderingServer.get_current_rendering_method() != "gl_compatibility"
-	sun.directional_shadow_max_distance = 60.0
+	# (대신 캐릭터 발밑 원형 그림자가 모든 렌더러에서 위치감을 준다)
+	sun.shadow_enabled = not compat
+	sun.shadow_opacity = 0.55
+	sun.shadow_blur = 2.0
+	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+	sun.directional_shadow_max_distance = 50.0
 	add_child(sun)
+	# 반대편에서 오는 약한 하늘빛 보조광 → 그늘이 칙칙하지 않게
+	var fill := DirectionalLight3D.new()
+	fill.rotation_degrees = Vector3(-25, sun_rot_deg.y + 180.0, 0)
+	fill.light_energy = 0.14
+	fill.light_color = Color(0.75, 0.82, 1.0)
+	fill.shadow_enabled = false
+	add_child(fill)
+	_add_backdrop()
+	_batch_static.call_deferred()  # 맵 _ready가 끝난 뒤 장식 합치기
+
+
+## 모든 맵 공통 원경: 멀리 떠 있는 구름과 작은 섬 → 빈 하늘 대신 깊이감 (충돌 없음, 안개에 녹아듦)
+func _add_backdrop() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(map_id)
+	var grass := Color(0.46, 0.79, 0.42)
+	var rock := Color(0.72, 0.6, 0.58)
+	for i in 14:
+		var a := TAU * i / 14.0 + rng.randf() * 0.3
+		var r := rng.randf_range(95.0, 135.0)
+		add_cloud(Vector3(cos(a) * r, rng.randf_range(-6.0, 22.0), sin(a) * r), rng.randf_range(1.4, 2.4))
+	for i in 6:
+		var a := TAU * i / 6.0 + rng.randf() * 0.5
+		var r := rng.randf_range(80.0, 110.0)
+		var p := Vector3(cos(a) * r, rng.randf_range(-28.0, -12.0), sin(a) * r)
+		var s := rng.randf_range(4.0, 8.0)
+		add_mesh(cyl_mesh(s, s, 1.4, 20), p, grass)
+		add_island_underside(p + Vector3(0, -0.7, 0), s, s * 1.4, rock)
+		add_tree(p + Vector3(0, 0.7, 0), i % 3, s * 0.18, false)
 
 
 static func toon_material(color: Color) -> ShaderMaterial:
@@ -231,6 +549,7 @@ func add_pad(kind: String, center: Vector3, half: Vector3, power := 15.0) -> voi
 
 func add_gate(pos: Vector3, size: Vector3, color := Color(0.75, 0.55, 0.95)) -> int:
 	var g := add_box(pos, size, color)
+	g.set_meta("dynamic", true)  # 열고 닫히므로 장식 합치기에서 제외
 	gates.append(g)
 	return gates.size() - 1
 

@@ -316,8 +316,9 @@ func _build_animations() -> void:
 	# 없으면 Godot가 빠진 위치를 (0,0,0)으로 채워서 두 발·두 손이 몸 한가운데 겹쳐 보였다.
 	lib.add_animation("RESET", _anim_reset())
 	lib.add_animation("idle", _anim_idle())
-	lib.add_animation("walk", _anim_gait(0.5, 0.14, 0.08, 0.06, 0.12, 4.0, 3.0))
-	lib.add_animation("run", _anim_gait(0.36, 0.22, 0.14, 0.10, 0.2, 12.0, 4.0))
+	# 발걸음 폭을 이동 속도에 맞춰 크게 (작으면 몸이 스케이트 타듯 미끄러져 보임)
+	lib.add_animation("walk", _anim_gait(0.44, 0.2, 0.1, 0.06, 0.14, 4.0, 3.0))
+	lib.add_animation("run", _anim_gait(0.32, 0.3, 0.16, 0.10, 0.22, 12.0, 4.0))
 	lib.add_animation("jump", _anim_jump())
 	lib.add_animation("fall", _anim_fall())
 	lib.add_animation("land", _anim_land())

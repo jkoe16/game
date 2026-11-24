@@ -141,7 +141,8 @@ const server = http.createServer((req, res) => {
   if (path === "/healthz" || path === "/") {
     const list = [...servers.values()].map((s) => ({ room: s.room || "public", mode: s.mode, players: s.conns, started: s.started }));
     res.writeHead(200, { "content-type": "application/json", "access-control-allow-origin": "*" });
-    res.end(JSON.stringify({ ok: true, game: "3D PARTY WORLD", servers: list, max_servers: MAX_SERVERS }));
+    const version = (process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || "dev").slice(0, 7);
+    res.end(JSON.stringify({ ok: true, game: "3D PARTY WORLD", version, servers: list, max_servers: MAX_SERVERS }));
     return;
   }
   res.writeHead(404);

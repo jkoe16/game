@@ -43,6 +43,7 @@ jobs:
         run: |
           set -e
           grep server_url config/online.cfg
+          printf '[build]\ncommit="%s"\n' "${GITHUB_SHA::7}" > config/build.cfg
           mkdir -p build/web && touch build/.gdignore
           godot --headless --path . --import > import.log 2>&1 || (tail -40 import.log; exit 1)
           godot --headless --path . --export-release "Web" build/web/index.html

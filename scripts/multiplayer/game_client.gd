@@ -49,6 +49,8 @@ var remote_ids_seen := {}
 ## 게임 모드 상태 (서버가 보냄)
 var mode_state := {}
 var mode_id := ""
+## 접속한 서버의 버전 (git 커밋 앞 7자리). 업데이트가 반영됐는지 확인용
+var server_version := ""
 var transfers: Array = []
 var last_results: Array = []
 var phases_seen := {}
@@ -192,6 +194,7 @@ func on_welcome(data: Variant) -> void:
 	latest_tick = int(d.get("tick", 0))
 	server_tick_est = latest_tick
 	mode_id = str(d.get("mode_id", ""))
+	server_version = str(d.get("server_version", "?"))
 	_load_map(map_id)
 	for info in d.get("players", []):
 		if int(info["peer_id"]) == my_id:

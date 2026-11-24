@@ -248,6 +248,7 @@ func on_hello(peer_id: int, data: Variant) -> void:
 		"peer_id": peer_id,
 		"map_id": map_id,
 		"mode_id": mode_id,
+		"server_version": BuildInfo.server_version(),
 		"mode_state": mode.public_state(),
 		"tick": tick,
 		"players": roster,

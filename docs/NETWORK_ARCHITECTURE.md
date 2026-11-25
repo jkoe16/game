@@ -28,7 +28,7 @@
 
 | 채널 | 모드 | 메시지 |
 |---|---|---|
-| 0 | reliable | `c_hello`, `c_emote`, `s_welcome`, `s_reject`, `s_player_joined/left`, `s_emote` |
+| 0 | reliable | `c_hello`, `c_emote`, `c_leave`, `s_welcome`, `s_reject`, `s_player_joined/left`, `s_emote` |
 | 1 | unreliable | `c_input` — 서버가 아직 ack하지 않은 입력 최대 16개를 매 틱 전송 |
 | 2 | unreliable_ordered | `s_snapshot` — 오래된 스냅샷은 버려도 됨 |
 
@@ -41,9 +41,9 @@
 
 ## 4. 입장 절차 ✅
 1. ENet 연결 → 서버는 `pending`에 등록 (5초 내 hello 없으면 `hello_timeout` 거절)
-2. `c_hello{protocol, token, nickname, appearance, platform}`
+2. `c_hello{protocol, token, nickname, appearance, platform, resume?}` (`resume` = 재접속용 세션 토큰, 8장)
 3. 서버 검증 순서: 타입 → 프로토콜 버전 → 토큰 → 정원 → 닉네임 → 외형 정규화
-4. `s_welcome{peer_id, map_id, tick, players[]}` + 기존 인원에게 `s_player_joined`
+4. `s_welcome{peer_id, map_id, tick, players[], session, resumed}` + 기존 인원에게 `s_player_joined`
 5. 거절 시 `s_reject(reason)` 후 0.3초 뒤 연결 종료
 
 거절 사유: `bad_request`, `version_mismatch`, `auth_failed`, `room_full`, `bad_nickname`, `hello_timeout`, 추방: `input_flood`, `too_many_violations`
@@ -55,7 +55,7 @@
 - 매 틱 credit +1 (최대 8). 입력 1개 = credit 1.
 - 늦게 도착한 입력은 틱당 최대 3개까지 따라잡아 처리 → **지터가 있어도 클라이언트 예측과 정확히 일치** (테스트: 보정 192회 → 0회).
 - 평균 처리 속도는 60/s를 넘을 수 없음 → 입력을 많이 보내도 빨라지지 않음 (스피드핵 불가).
-- 8틱(133ms) 동안 입력이 없으면 직전 이동으로 외삽 → 랙 스위치로 공중에 멈추는 악용 방지.
+- 20틱(333ms) 동안 입력이 없으면 직전 이동으로 외삽 → 랙 스위치로 공중에 멈추는 악용 방지. 외삽은 최대 30틱(0.5초)까지만, 그 뒤로는 제자리 (끊기는 중인 캐릭터가 계속 걸어가 떨어지지 않게).
 ### 서버 보정 (Reconciliation)
 스냅샷의 내 `ack`·위치를 같은 seq의 예측 위치와 비교. 5cm 초과 오차 시 서버 상태로 되돌리고 미확인 입력을 재시뮬레이션.
 ### 원격 플레이어 보간
@@ -80,8 +80,16 @@
 - **미확인 입력 최대 16개 재전송**: 손실 버스트 후 첫 패킷으로 공백 복구 (Bot3 유실 47 → 7).
 
 ## 8. 재접속·장애 처리
-- 연결 끊김 감지 ✅ (ENet → `peer_disconnected` → 몸체 제거, 다른 인원에게 통지)
-- ⬜ 재접속: 백엔드 세션 토큰으로 30초간 슬롯/상태 유지 후 복귀.
+- 연결 끊김 감지 ✅ (`peer_disconnected` / 서버: 입력이 10초 동안 없으면 끊긴 것으로 처리 / 클라이언트: 스냅샷이 4초 동안 없으면 끊긴 것으로 처리)
+- 재접속 ✅ (프로토콜 3)
+  - 입장 시 서버가 무작위 세션 토큰(128비트)을 `s_welcome.session`으로 준다. 재접속할 때마다 새 토큰.
+  - 갑자기 끊기면 서버는 플레이어를 지우지 않고 **30초**(`RECONNECT_GRACE_MS`, `--reconnect-grace=초`) 동안 자리를 남긴다. 캐릭터는 그 자리에 멈춤(중력만), 모드 점수·목숨·체크포인트·순위는 그대로, 정원에도 포함. 다른 인원에게는 알림만.
+  - 클라이언트는 같은 주소로 1초 간격 최대 25번 다시 접속하고 hello에 `resume`을 넣는다. 서버는 새 연결 번호로 자리를 옮기고(`GameMode.on_player_rekeyed`) `s_welcome{resumed: true}`를 보낸다. 다른 인원에게는 옛 번호 퇴장 + 새 번호 입장.
+  - Firebase 모드: 토큰의 계정(uid)이 자리 주인과 다르면 이어받지 않음. 토큰이 없어도(새로고침) 같은 계정의 끊긴 자리가 있으면 이어서.
+  - 서버가 아직 끊김을 모르는 연결(조용히 끊긴 회선)도 새 연결이 이어받고, 옛 연결은 정리.
+  - 자리를 남기지 않는 경우: 추방, 거절, 서버 이동(포털·결과 후 로비), 스스로 나가기(`c_leave`, 메뉴로 나가기). 30초 안에 안 돌아오면 그때 퇴장 처리(플레이 기록 저장).
+  - 끊긴 동안 라운드가 끝나 다른 인원이 로비로 이동했으면, 돌아오자마자 같은 곳으로 이동.
+  - 클라우드 게이트웨이: 같은 주소(방 코드 경로)로 다시 들어오면 같은 방 서버로 연결됨. 빈 서버 종료 시간(기본 60초)이 유예 30초보다 길어서 혼자 있던 사람도 돌아올 수 있음.
 - ⬜ 서버 프로세스 장애: 매치메이커 헬스체크 → 진행 중 라운드는 무효 처리 + 참여 보상 지급, 플레이어는 로비로.
 
 ## 9. 확장 (12명+)

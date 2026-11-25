@@ -7,6 +7,8 @@ extends Node
 ##   godot --headless -- --connect=127.0.0.1:7777 --bot=walker --quit-after=10
 ##   godot -- --offline
 ##   인증: --auth=firebase|dev (서버), --login=anonymous|email:<주소>:<비번> (테스트 봇 클라이언트)
+##   재접속: --reconnect-grace=<초> (서버, 0=끔), --drop-at=<초>[,<초>...] (테스트 봇: 그 시각에 연결을 갑자기 끊었다가 재접속),
+##           --drop-for=<초> (끊고 나서 재접속까지 기다릴 시간), --leave-at=<초> (테스트 봇: 스스로 나가기)
 
 var args := {}
 var server: GameServer
@@ -95,6 +97,8 @@ func _start_server() -> void:
 		mode = "firebase" if FirebaseConfig.load_default().is_server_ready() else "dev"
 	server.auth_mode = mode
 	server.service_account_path = ServiceAccountAuth.find_key_path(args)
+	if args.has("reconnect-grace"):
+		server.reconnect_grace_ms = maxi(0, int(float(args["reconnect-grace"]) * 1000.0))
 	add_child(server)
 	if not server.start():
 		get_tree().quit(1)
@@ -127,6 +131,17 @@ func _start_client(host: String, port: int, offline: bool) -> void:
 		hud.leave_requested.connect(_return_to_menu.bind(""))
 	client.session_ended.connect(_on_session_ended)
 	client.start()
+	# 테스트 봇: 연결을 갑자기 끊기 (재접속 검증) / 스스로 나가기
+	if args.has("drop-at"):
+		for t in str(args["drop-at"]).split(","):
+			if t.is_valid_float():
+				get_tree().create_timer(float(t)).timeout.connect(func() -> void:
+					if client:
+						client.simulate_drop(float(args.get("drop-for", 1.0))))
+	if args.has("leave-at"):
+		get_tree().create_timer(float(args["leave-at"])).timeout.connect(func() -> void:
+			if client:
+				await client.leave())
 
 
 ## Firebase가 설정되어 있으면: 자동 로그인 시도 → 실패 시 로그인 화면 → 메뉴
@@ -237,6 +252,7 @@ func _on_session_ended(reason: String) -> void:
 		"room_full": "방이 꽉 찼어요.", "connection_failed": "서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.",
 		"server_disconnected": "서버와 연결이 끊어졌어요.", "version_mismatch": "게임 버전이 달라요. 페이지를 새로고침(Ctrl+F5) 해 주세요.",
 		"auth_failed": "로그인이 확인되지 않았어요. 다시 로그인해 주세요.",
+		"reconnect_failed": "연결이 끊긴 뒤 다시 접속하지 못했어요. 잠시 후 다시 시도해 주세요.",
 	}
 	var msg: String = why.get(reason, "연결이 끝났어요. (%s)" % reason)
 	var ended_client := client
@@ -251,6 +267,10 @@ func _return_to_menu(notice: String) -> void:
 		return
 	if client.session_ended.is_connected(_on_session_ended):
 		client.session_ended.disconnect(_on_session_ended)
+	var leaving_client := client
+	await leaving_client.leave()  # 서버에 "스스로 나감"을 알려 재접속용 자리를 남기지 않게
+	if client != leaving_client:
+		return  # 기다리는 사이 이미 정리됨 (나가기 버튼 두 번 등)
 	Net.client_handler = null
 	Net.stop()
 	client.queue_free()

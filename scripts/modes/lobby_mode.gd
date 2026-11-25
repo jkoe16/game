@@ -66,6 +66,11 @@ func on_player_left(peer_id: int) -> void:
 	dirty = true
 
 
+func on_player_rekeyed(old_id: int, new_id: int) -> void:
+	super(old_id, new_id)
+	_hold.erase(old_id)  # 포털 위에서 끊겼다면 다시 들어온 뒤 처음부터 기다림
+
+
 func on_fell(_peer_id: int) -> Vector3:
 	return map.get_spawn_point(0)
 

@@ -15,7 +15,7 @@ ERRS=$(grep -c "SCRIPT ERROR" "$OUT/unit.log")
 echo "unit: $UNIT  script_errors=$ERRS"
 if ! echo "$UNIT" | grep -q "failed=0" || [ "$ERRS" != "0" ]; then FAILED+=(unit); grep -E "FAIL|SCRIPT ERROR" "$OUT/unit.log" | head -20; fi
 
-for sc in basic capacity auth authflow data touch minigames portal; do
+for sc in basic capacity auth authflow data touch minigames portal reconnect; do
   RES=$(bash "$ROOT/tests/integration/net_test.sh" "$sc" "$OUT/$sc" 2>&1)
   LINE=$(echo "$RES" | grep NET_RESULT)
   echo "$LINE"

@@ -93,6 +93,9 @@ if (scenario === "auth") {
   check(badpw && !badpw.welcomed && badpw.rejected === "login_failed", "weak password blocked before connecting", badpw && badpw.rejected);
   check(e2 && e2.welcomed, "same account logs in from second device");
   check(e1 && e1.rejected === "logged_in_elsewhere", "first session kicked (one session per account)", e1 && e1.rejected);
+  check(guest && guest.resumed >= 1 && guest.welcomed, "guest dropped and resumed its seat (Firebase auth)", guest && `reconnects=${guest.reconnects} resumed=${guest.resumed}`);
+  check(e1 && e1.reconnects === 0, "kicked session does not try to reconnect", e1 && String(e1.reconnects));
+  check((server.stats.resumed || 0) >= 1, "server counted the Firebase resume", JSON.stringify(server.stats));
   const providers = server.players.map(p => p.nickname + ":" + p.auth_provider).sort().join(",");
   check(providers === "Email2:password,Guest:anonymous", "server holds guest + newest email session with verified providers", providers);
   check((server.stats.rejected.auth_failed || 0) === 2, "server counted 2 auth failures", JSON.stringify(server.stats.rejected));
@@ -216,6 +219,42 @@ if (scenario === "authflow") {
   const m = /AUTH_FLOW_RESULT passed=(\d+) failed=(\d+)/.exec(log);
   check(m && Number(m[2]) === 0 && Number(m[1]) > 0, "client auth flow (Godot)", m ? m[0] : "no result");
   for (const line of log.split(/\r?\n/).filter(l => l.includes("  FAIL  "))) console.log("    " + line.trim());
+}
+
+if (scenario === "reconnect") {
+  const c = Object.fromEntries(["stay", "cutter", "hole", "dropper", "ghost", "quietghost", "leaver", "racer"].map(n => [n, result(n, "CLIENT_RESULT")]));
+  const srvLog = fs.readFileSync(path.join(dir, "server.log"), "utf8");
+  const names = server.players.map(p => p.nickname).sort().join(",");
+  check(names === "Cutter,Dropper,Hole,Stay", "server keeps exactly the players who came back (ghosts and leaver gone)", names);
+  for (const [n, nick, how] of [["cutter", "Cutter", "connection cut"], ["hole", "Hole", "silent link (blackhole)"], ["dropper", "Dropper", "abrupt close"]]) {
+    const r = c[n];
+    check(r && r.welcomed && r.reconnects >= 1 && r.resumed >= 1, `${nick} resumed its seat after ${how}`, r && `welcomed=${r.welcomed} reconnects=${r.reconnects} resumed=${r.resumed}`);
+    check(r && r.distance_moved > 10, `${nick} kept moving after reconnecting`, r && String(r.distance_moved));
+    // 끊긴 자리 그대로 돌아옴. (조용한 끊김은 감지까지 4초 동안 클라이언트 혼자 움직였으므로 비교하지 않음 — 서버 위치로 돌아감)
+    if (n !== "hole") check(r && r.resume_offset >= 0 && r.resume_offset < 3, `${nick} came back where it was (< 3m)`, r && String(r.resume_offset) + "m");
+    check(byNick[nick] && byNick[nick].resumes >= 1 && !byNick[nick].away, `server shows ${nick} resumed and connected`, byNick[nick] && JSON.stringify({ resumes: byNick[nick].resumes, away: byNick[nick].away }));
+    check(c.stay && r && c.stay.remote_ids_seen.includes(r.id), `Stay sees ${nick} again under its new connection`, r && `id=${r.id}`);
+  }
+  check(c.stay && c.stay.reconnects === 0 && c.stay.welcomed, "unaffected player never had to reconnect");
+  // (낙하 리스폰 같은 순간이동은 제외: 걷기 봇은 재접속 후 원 궤도가 처음부터 다시 시작돼 섬 밖으로 걸어갈 수 있음)
+  for (const n of ["cutter", "dropper"]) check(c[n] && c[n].max_small_correction < 0.5, `${n}: prediction stays consistent after resume (<0.5m)`, c[n] && String(c[n].max_small_correction));
+  check((server.stats.resumed || 0) >= 3, "server counted resumes", JSON.stringify(server.stats));
+  check((server.stats.away_expired || 0) >= 2, "seats expired for players who never came back", JSON.stringify(server.stats));
+  check((server.stats.silent_dropped || 0) >= 1, "server detected a silently dead connection by input silence", JSON.stringify(server.stats));
+  check(/\(Ghost\) did not come back/.test(srvLog), "Ghost's seat was held, then released");
+  check(/\(QuietGhost\) silent for/.test(srvLog) && /\(QuietGhost\) did not come back/.test(srvLog), "QuietGhost detected as silent, then released");
+  check(/\(Leaver\) left/.test(srvLog) && !/\(Leaver\) disconnected — holding seat/.test(srvLog), "explicit leave removes the player at once (no seat held)");
+  check(/resumed as \d+ \('Hole'\) after 0ms/.test(srvLog), "new connection took over a seat the server still thought was connected");
+  for (const p of server.players) check(p.max_speed <= WALK_SPEED + 0.5, `server-side speed bounded for ${p.nickname}`, String(p.max_speed));
+  // 미니게임 도중 끊겼다 돌아옴 (ENet): 순위·진행도 유지
+  const race = result("srv_race", "SERVER_RESULT");
+  const raceLog = fs.existsSync(path.join(dir, "srv_race.log")) ? fs.readFileSync(path.join(dir, "srv_race.log"), "utf8") : "";
+  const rr = /ROUND_RESULTS (\[.*\])/.exec(raceLog);
+  const results = rr ? JSON.parse(rr[1]) : [];
+  check(race && race.rounds >= 1 && (race.stats.resumed || 0) >= 1, "race server: player dropped mid-round and resumed (ENet)", race && JSON.stringify(race.stats));
+  check(results.length === 1 && results[0].nickname === "Racer" && results[0].rank === 1, "race results list the returning player once", JSON.stringify(results));
+  check(results.length === 1 && /완주|진행 ([1-9]\d|[2-9])%/.test(results[0].score), "race progress survived the reconnect", results[0] && results[0].score);
+  check(c.racer && c.racer.resumed >= 1 && c.racer.my_result && c.racer.my_result.rank === 1, "returning racer received its own result", c.racer && JSON.stringify(c.racer.my_result));
 }
 
 console.log(`NET_RESULT scenario=${scenario} passed=${pass} failed=${fail}`);

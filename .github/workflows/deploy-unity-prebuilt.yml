@@ -1,0 +1,42 @@
+# PC의 Unity에서 만든 웹 빌드(unity-webbuild/ 폴더)를 GitHub Pages 의 /unity/ 에 올린다.
+# Unity 라이선스가 필요 없다. 사용법은 unity-webbuild/README.md
+name: Unity 웹 배포 (PC 빌드)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, claude/project-thread-9oeb7i]
+    paths: ["unity-webbuild/**"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: deploy-web
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: GitHub Pages /unity/ 에 올리기
+        run: |
+          set -e
+          if [ ! -f unity-webbuild/index.html ]; then
+            echo "- unity-webbuild/index.html 이 아직 없어 건너뜀" >> "$GITHUB_STEP_SUMMARY"; exit 0
+          fi
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          REMOTE="https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git"
+          if git clone -q --depth 1 -b gh-pages "$REMOTE" pages; then :; else
+            mkdir pages && cd pages && git init -q -b gh-pages && cd ..
+          fi
+          rm -rf pages/unity && mkdir -p pages/unity
+          cp -r unity-webbuild/. pages/unity/ && rm -f pages/unity/README.md
+          touch pages/.nojekyll
+          cd pages
+          git add -A
+          git commit -q -m "Unity 웹 빌드 (PC) ${GITHUB_SHA::7}" || echo "바뀐 것 없음"
+          git push "$REMOTE" gh-pages
+          echo "- Unity 웹: https://jkoe16.github.io/game/unity/" >> "$GITHUB_STEP_SUMMARY"

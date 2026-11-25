@@ -1,0 +1,124 @@
+using UnityEngine;
+
+namespace PartyWorld
+{
+    /// <summary>
+    /// 혼자 연습하는 미니게임의 공통 흐름 (Godot game_mode.gd 의 라운드 흐름을 1인용으로 줄임).
+    /// countdown(출발선, 이동 금지 3초) → playing → results(결과 표시 후 광장으로).
+    /// 온라인 단계에서 서버 모드로 바뀌어도 맵·판정 코드는 그대로 쓴다.
+    /// </summary>
+    public abstract class SoloMode : MonoBehaviour
+    {
+        public const int CountdownTicks = 3 * 60;
+        public const int ResultsTicks = 6 * 60;
+
+        public GameSession session;
+        public GameMap map;
+        public string phase = "countdown";
+        public int phaseEndTick;
+        public int roundStartTick;
+        protected int tick;
+        protected int roundTicks = 150 * 60;
+
+        public abstract string Title { get; }
+        public abstract string RulesText { get; }
+        /// <summary>결과 화면 한 줄 (예: "완주 42.3초")</summary>
+        protected abstract string ResultText();
+        protected abstract void ModeTick(PlayerBody body);
+        protected abstract bool IsOver();
+        /// <summary>떨어졌을 때 다시 나올 곳</summary>
+        public abstract Vector3 OnFell();
+
+        /// <summary>카운트다운이 끝나고 달리기 시작하는 순간</summary>
+        protected virtual void OnRoundStart() { }
+
+        public virtual void Begin(int nowTick)
+        {
+            tick = nowTick;
+            phase = "countdown";
+            phaseEndTick = nowTick + CountdownTicks;
+            // 라운드 시작 틱을 미리 정해 두면 가속 장애물이 처음부터 정확하다
+            roundStartTick = phaseEndTick;
+            map.roundStartTick = roundStartTick;
+            session.body.Teleport(map.GetStartPoint(0));
+            session.body.frozen = true;
+            Hud.Banner(Title, 3f);
+        }
+
+        public void Tick(int t, PlayerBody body)
+        {
+            tick = t;
+            switch (phase)
+            {
+                case "countdown":
+                    body.frozen = true;
+                    if (t >= phaseEndTick)
+                    {
+                        phase = "playing";
+                        phaseEndTick = t + roundTicks;
+                        body.frozen = false;
+                        Hud.Banner("출발!", 1.2f);
+                        OnRoundStart();
+                    }
+                    break;
+                case "playing":
+                    ModeTick(body);
+                    if (IsOver() || t >= phaseEndTick) EndRound(body);
+                    break;
+                case "results":
+                    if (t >= phaseEndTick) session.LoadLobby();
+                    break;
+            }
+        }
+
+        void EndRound(PlayerBody body)
+        {
+            phase = "results";
+            phaseEndTick = tick + ResultsTicks;
+            body.frozen = true;
+        }
+
+        /// <summary>남은 시간(초) 또는 카운트다운 숫자</summary>
+        public float SecondsLeft => Mathf.Max(0, phaseEndTick - tick) / 60f;
+        public float ElapsedSec => Mathf.Max(0, tick - roundStartTick) / 60f;
+
+        /// <summary>제목 아래 한 줄 (진행·점수 등)</summary>
+        protected virtual string SubText => "";
+
+        protected virtual void Update()
+        {
+            var hud = GameHud.I;
+            if (hud == null) return;
+            if (phase == "countdown")
+            {
+                int n = Mathf.CeilToInt(SecondsLeft);
+                hud.SetTop(Title, "");
+                hud.SetBig(n > 0 ? n.ToString() : "", RulesText);
+                hud.HideResults();
+            }
+            else if (phase == "playing")
+            {
+                int left = Mathf.CeilToInt(SecondsLeft);
+                hud.SetTop($"{Title}   {left / 60}:{left % 60:00}", SubText);
+                hud.SetBig("");
+            }
+            else if (phase == "results")
+            {
+                hud.SetTop(Title, "");
+                hud.SetBig("");
+                string[] lines = ResultText().Split('\n');
+                hud.ShowResults(lines[0], lines.Length > 1 ? string.Join("\n", lines, 1, lines.Length - 1) : "",
+                    $"{Mathf.CeilToInt(SecondsLeft)}초 뒤 광장으로 돌아가요");
+            }
+        }
+
+        protected virtual void OnDestroy()
+        {
+            var hud = GameHud.I;
+            if (hud == null) return;
+            hud.SetTop("", "");
+            hud.SetBig("");
+            hud.HideResults();
+        }
+    }
+}

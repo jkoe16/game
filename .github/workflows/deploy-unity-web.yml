@@ -1,0 +1,92 @@
+# Unity 판 웹 빌드 → GitHub Pages 의 /unity/ 주소에 올린다: https://jkoe16.github.io/game/unity/
+# unity/ 폴더가 바뀌어 푸시되면 자동 실행. GitHub 웹에서 Actions → "Unity 웹 배포" → Run workflow 로도 실행 가능.
+# 지금 Godot 웹 게임(https://game-28f1b.web.app, https://jkoe16.github.io/game/)은 그대로 둔다.
+#
+# 준비 (한 번만): GitHub 저장소 → Settings → Secrets and variables → Actions → New repository secret
+#   UNITY_EMAIL    Unity 계정 이메일
+#   UNITY_PASSWORD Unity 계정 비밀번호
+#   UNITY_LICENSE  Unity Hub 로 로그인한 PC의 C:\ProgramData\Unity\Unity_lic.ulf 파일 내용 전체
+#   (셋 중 하나라도 없으면 빌드를 건너뛰고 요약에 안내만 남긴다)
+name: Unity 웹 배포
+
+# 지금은 Unity 계정 로그인 문제로 자동 실행을 꺼 둠 (PC 빌드 방식: deploy-unity-prebuilt.yml 사용).
+# 로그인이 해결되면 아래 push 줄들의 주석을 풀면 된다.
+on:
+  workflow_dispatch:
+  # push:
+  #   branches: [main, claude/project-thread-9oeb7i]
+  #   paths: ["unity/**", ".github/workflows/deploy-unity-web.yml"]
+
+permissions:
+  contents: write   # gh-pages 브랜치 갱신
+
+concurrency:
+  group: deploy-web          # Godot 웹 배포와 같은 gh-pages 를 쓰므로 동시에 돌지 않게
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Unity 비밀값 확인
+        id: lic
+        env:
+          L: ${{ secrets.UNITY_LICENSE }}
+          E: ${{ secrets.UNITY_EMAIL }}
+          P: ${{ secrets.UNITY_PASSWORD }}
+        run: |
+          if [ -n "$L" ] && [ -n "$E" ] && [ -n "$P" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "- Unity 비밀값(UNITY_LICENSE, UNITY_EMAIL, UNITY_PASSWORD)이 없어 빌드를 건너뜀. 워크플로 파일 맨 위 설명 참고" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.lic.outputs.ok == 'true'
+
+      - name: 디스크 공간 확보 (Unity 이미지 약 8GB)
+        if: steps.lic.outputs.ok == 'true'
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL && df -h /
+
+      - uses: actions/cache@v4
+        if: steps.lic.outputs.ok == 'true'
+        with:
+          path: unity/Library
+          key: unity-library-webgl-${{ hashFiles('unity/Packages/manifest.json', 'unity/ProjectSettings/ProjectVersion.txt') }}
+          restore-keys: unity-library-webgl-
+
+      - name: Unity 웹 빌드
+        if: steps.lic.outputs.ok == 'true'
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: unity
+          targetPlatform: WebGL
+          customImage: unityci/editor:ubuntu-6000.6.10f1-webgl-4
+          buildMethod: PartyWorld.EditorTools.BuildScript.BuildWeb
+          buildName: web
+          allowDirtyBuild: true
+
+      - name: GitHub Pages /unity/ 에 올리기
+        if: steps.lic.outputs.ok == 'true'
+        run: |
+          set -e
+          OUT=$(dirname "$(sudo find build -name index.html | head -1)")
+          test -n "$OUT" && ls -la "$OUT"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          REMOTE="https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git"
+          if git clone -q --depth 1 -b gh-pages "$REMOTE" pages; then :; else
+            mkdir pages && cd pages && git init -q -b gh-pages && cd ..
+          fi
+          rm -rf pages/unity && mkdir -p pages/unity
+          sudo cp -r "$OUT"/. pages/unity/ && sudo chown -R "$(id -u):$(id -g)" pages
+          touch pages/.nojekyll
+          cd pages
+          git add -A
+          git commit -q -m "Unity 웹 빌드 ${GITHUB_SHA::7}" || echo "바뀐 것 없음"
+          git push "$REMOTE" gh-pages
+          echo "- Unity 웹: https://jkoe16.github.io/game/unity/" >> "$GITHUB_STEP_SUMMARY"

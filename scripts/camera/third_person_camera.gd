@@ -51,13 +51,12 @@ func _process(delta: float) -> void:
 	if not _snapped or _follow.distance_to(tp) > 15.0:
 		_follow = tp
 		_snapped = true
-	# 수평은 거의 바로, 수직은 느리게 따라가 점프할 때 화면이 덜 흔들린다.
-	# 수평을 느리게(예전 20) 따라가면 걷는 동안 0.3m 뒤처졌다가 멈출 때 화면이 계속 흘러서
-	# 캐릭터가 키를 뗀 뒤에도 밀리는 것처럼 보였다. 50이면 뒤처짐 0.13m, 멈춘 뒤 0.06초 안에 따라잡는다.
-	var kxz := 1.0 - exp(-50.0 * delta)
+	# 수평은 캐릭터를 그대로 따라가고(캐릭터 위치는 이미 물리 보간으로 부드럽다), 수직만 느리게 따라가
+	# 점프할 때 화면이 덜 흔들리게 한다. 수평까지 부드럽게 따라가면 걷는 동안 카메라가 뒤처졌다가
+	# 키를 뗀 뒤에도 화면이 0.2m쯤 더 흘러서 캐릭터가 밀리는 것처럼 보였다.
 	var ky := 1.0 - exp(-7.0 * delta)
-	_follow.x = lerpf(_follow.x, tp.x, kxz)
-	_follow.z = lerpf(_follow.z, tp.z, kxz)
+	_follow.x = tp.x
+	_follow.z = tp.z
 	_follow.y = lerpf(_follow.y, tp.y, ky)
 	global_position = _follow
 

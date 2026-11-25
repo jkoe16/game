@@ -23,7 +23,7 @@
     },
     "com.unity.modules.animation": {
       "version": "1.0.0",
-      "depth": 2,
+      "depth": 0,
       "source": "builtin",
       "dependencies": {}
     },
@@ -39,6 +39,12 @@
       "source": "builtin",
       "dependencies": {}
     },
+    "com.unity.modules.imageconversion": {
+      "version": "1.0.0",
+      "depth": 1,
+      "source": "builtin",
+      "dependencies": {}
+    },
     "com.unity.modules.imgui": {
       "version": "1.0.0",
       "depth": 0,
@@ -47,7 +53,13 @@
     },
     "com.unity.modules.jsonserialize": {
       "version": "1.0.0",
-      "depth": 2,
+      "depth": 0,
+      "source": "builtin",
+      "dependencies": {}
+    },
+    "com.unity.modules.particlesystem": {
+      "version": "1.0.0",
+      "depth": 0,
       "source": "builtin",
       "dependencies": {}
     },
@@ -71,6 +83,14 @@
       "source": "builtin",
       "dependencies": {}
     },
+    "com.unity.modules.screencapture": {
+      "version": "1.0.0",
+      "depth": 0,
+      "source": "builtin",
+      "dependencies": {
+        "com.unity.modules.imageconversion": "1.0.0"
+      }
+    },
     "com.unity.modules.ui": {
       "version": "1.0.0",
       "depth": 0,
@@ -89,6 +109,12 @@
         "com.unity.modules.physics": "1.0.0",
         "com.unity.modules.animation": "1.0.0"
       }
+    },
+    "com.unity.modules.unitywebrequest": {
+      "version": "1.0.0",
+      "depth": 0,
+      "source": "builtin",
+      "dependencies": {}
     }
   }
 }

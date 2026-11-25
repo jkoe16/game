@@ -51,6 +51,24 @@ namespace PartyWorld
 #endif
         }
 
+        /// <summary>감정 표현 키 1~4 (Godot emote_1~4). 누른 번호(0~3), 없으면 -1</summary>
+        public static int EmotePressed()
+        {
+#if ENABLE_INPUT_SYSTEM
+            var k = Keyboard.current;
+            if (k == null) return -1;
+            if (k.digit1Key.wasPressedThisFrame) return 0;
+            if (k.digit2Key.wasPressedThisFrame) return 1;
+            if (k.digit3Key.wasPressedThisFrame) return 2;
+            if (k.digit4Key.wasPressedThisFrame) return 3;
+            return -1;
+#else
+            for (int i = 0; i < 4; i++)
+                if (Input.GetKeyDown(KeyCode.Alpha1 + i)) return i;
+            return -1;
+#endif
+        }
+
         public static bool EscapePressed()
         {
 #if ENABLE_INPUT_SYSTEM

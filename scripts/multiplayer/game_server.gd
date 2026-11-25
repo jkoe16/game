@@ -551,7 +551,7 @@ func _simulate_one(sp: ServerPlayer, input: PlayerInput, delta: float) -> void:
 	var before := sp.body.global_position
 	sp.body.simulate(input, delta, tick)
 	var after := sp.body.global_position
-	if sp.body.stun_time <= 0.0 and sp.body.boost_time <= 0.0 and sp.body.floor_mover < 0 and sp.body.shield_time <= 0.0:
+	if sp.away_since_ms == 0 and sp.body.stun_time <= 0.0 and sp.body.boost_time <= 0.0 and sp.body.floor_mover < 0 and sp.body.shield_time <= 0.0:
 		sp.max_speed = maxf(sp.max_speed, Vector2(after.x - before.x, after.z - before.z).length() / delta)
 	if after.y < map.kill_height:
 		var p := mode.on_fell(sp.peer_id)

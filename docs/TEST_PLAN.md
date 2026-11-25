@@ -113,7 +113,8 @@
 | 묶음 | 결과 |
 |---|---|
 | 단위·물리 (`run_tests.gd`) — 모드 엔트리 재지정(목숨·상태·결과 유지, 로비 포털 타이머 초기화) 추가 | **158/158 통과** |
-| `net_test.sh reconnect` — 로비(WebSocket, 유예 6초) + 장애물 레이스(ENet) | **45/45 통과** (2회 연속) |
+| `net_test.sh reconnect` — 로비(WebSocket, 유예 6초) + 장애물 레이스(ENet) | **45/45 통과** (마지막 수정 후 3회 연속) |
+| 회귀: capacity·auth·authflow·data·touch·minigames·portal·ws·jitter·gateway·rooms·offline | 모두 통과. basic의 "예측 보정 < 0.5m"는 이 리눅스 컨테이너에서 변경 전 코드로도 6번 중 4번 실패(0.7~0.9m, 한 번은 31m, 프로세스 7개 동시 시작 영향으로 추정, 4장 관찰 사항과 같은 현상) → 이번 변경과 무관 |
 | `net_test.sh auth` — Guest가 도중에 끊겼다가 Firebase 계정 확인 후 같은 자리로 복귀, 추방된 세션은 재접속 안 함 | **24/24 통과** |
 
 `reconnect` 시나리오 내용:

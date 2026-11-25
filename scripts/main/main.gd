@@ -308,6 +308,8 @@ func _print_report() -> void:
 func _quit_with_report() -> void:
 	if not args.has("report-at"):
 		_print_report()
+	if client:
+		await client.leave()  # 정상 종료: 서버가 재접속용 자리를 남기지 않고 바로 퇴장·기록 처리
 	Net.stop()
 	get_tree().quit()
 

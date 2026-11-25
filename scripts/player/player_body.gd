@@ -110,6 +110,9 @@ func simulate(input: PlayerInput, delta: float, world_tick := 0) -> void:
 	velocity = Vector3(horiz.x, vy, horiz.y)
 	var start := global_position
 	var desired := Vector3(horiz.x, 0.0, horiz.y) * delta
+	# 경사에서 같은 속도(floor_constant_speed)는 이미 바닥에 있을 때만. 착지하는 틱에 켜 두면
+	# 떨어지던 세로 이동량이 바닥을 따라 가로 이동으로 바뀌어 착지 순간 앞으로 툭 밀린다(최고 속도 초과).
+	floor_constant_speed = on_floor
 	move_and_slide()
 	if on_floor and vy <= 0.0 and is_on_wall():
 		var moved := global_position - start

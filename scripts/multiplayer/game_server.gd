@@ -549,9 +549,13 @@ func _step_player(sp: ServerPlayer, delta: float) -> void:
 
 func _simulate_one(sp: ServerPlayer, input: PlayerInput, delta: float) -> void:
 	var before := sp.body.global_position
+	var was_on_floor := sp.body.is_on_floor()
 	sp.body.simulate(input, delta, tick)
 	var after := sp.body.global_position
-	if sp.away_since_ms == 0 and sp.body.stun_time <= 0.0 and sp.body.boost_time <= 0.0 and sp.body.floor_mover < 0 and sp.body.shield_time <= 0.0:
+	# 착지하는 틱·벽에 부딪힌 틱은 빼고 잰다: 떨어지던 캡슐이 턱 모서리·벽에 미끄러지면 세로 이동이
+	# 가로로 바뀌어 한 틱만 7m/s 남짓 나온다(입력과 무관한 물리 현상, 부정행위 검사 대상 아님).
+	var clean_step := was_on_floor == sp.body.is_on_floor() and not sp.body.is_on_wall()
+	if clean_step and sp.away_since_ms == 0 and sp.body.stun_time <= 0.0 and sp.body.boost_time <= 0.0 and sp.body.floor_mover < 0 and sp.body.shield_time <= 0.0:
 		sp.max_speed = maxf(sp.max_speed, Vector2(after.x - before.x, after.z - before.z).length() / delta)
 	if after.y < map.kill_height:
 		var p := mode.on_fell(sp.peer_id)

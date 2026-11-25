@@ -46,7 +46,7 @@ export GODOT="/c/Users/User/Desktop/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-s
 
 ## 테스트
 ```bash
-"$GODOT" --headless --path . -s res://tests/run_tests.gd   # 164개 단위/물리/인증/미니게임 테스트
+"$GODOT" --headless --path . -s res://tests/run_tests.gd   # 169개 단위/물리/인증/미니게임 테스트
 bash tests/integration/net_test.sh basic                     # 보안/동기화 통합 테스트
 bash tests/integration/net_test.sh capacity                  # 8인 정원 테스트
 bash tests/integration/net_test.sh ws                        # WebSocket(웹 접속 경로) 보안/동기화

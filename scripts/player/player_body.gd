@@ -9,6 +9,8 @@ const WALK_SPEED := 6.5
 const ACCEL_GROUND := 60.0
 ## 멈출 때·반대로 돌 때 감속 (높을수록 얼음 위처럼 미끄러지지 않고 딱 선다)
 const DECEL_GROUND := 120.0
+## 키를 뗐을 때 감속 (260이면 걷던 속도에서 약 0.08m, 0.025초 만에 선다)
+const DECEL_STOP := 260.0
 const ACCEL_AIR := 18.0
 const STUN_FRICTION := 4.0
 const GRAVITY := 26.0
@@ -17,7 +19,6 @@ const JUMP_VELOCITY := 10.0
 const COYOTE_TIME := 0.1
 ## 점프 입력 여유: 컨트롤러가 점프를 누른 뒤 이 틱 수(≈0.12초) 동안 점프 입력을 유지 → 착지 직전 입력도 인정
 const JUMP_HOLD_TICKS := 7
-const TURN_SPEED := 14.0
 const STEP_HEIGHT := 0.35
 const BOOST_MULT := 1.6
 
@@ -67,21 +68,23 @@ func simulate(input: PlayerInput, delta: float, world_tick := 0) -> void:
 	var on_floor := is_on_floor()
 
 	var horiz := Vector2(velocity.x, velocity.z)
-	var accel: float
-	if stun_time > 0.0:
-		accel = STUN_FRICTION
-	elif on_floor:
-		accel = ACCEL_GROUND if move.length_squared() > 0.0001 else DECEL_GROUND
-		# 지금 움직이는 방향과 반대쪽으로 입력하면 브레이크처럼 빠르게 (방향 전환 때 미끄러짐 방지)
-		if move.length_squared() > 0.0001 and horiz.dot(move) < 0.0:
-			accel = DECEL_GROUND
-	else:
-		accel = ACCEL_AIR
+	var moving := move.length_squared() > 0.0001
 	var top_speed := WALK_SPEED * (BOOST_MULT if boost_time > 0.0 else 1.0)
 	if horiz.length() > top_speed and stun_time <= 0.0 and on_floor:
 		horiz = horiz.limit_length(maxf(top_speed, horiz.length() - DECEL_GROUND * delta))
+	elif stun_time > 0.0:
+		horiz = horiz.move_toward(move * top_speed, STUN_FRICTION * delta)
+	elif on_floor and moving:
+		# 입력 방향 성분과 옆 성분을 따로 처리: 옆으로 흐르는 속도는 브레이크처럼 빠르게 없애고
+		# 입력 방향으로는 가속 → 90° 꺾을 때도 비스듬히 미끄러지거나 속도가 푹 꺼지지 않는다.
+		var dir := move.normalized()
+		var along := horiz.dot(dir)
+		var side := (horiz - dir * along).move_toward(Vector2.ZERO, DECEL_GROUND * delta)
+		# 반대쪽으로 움직이던 중이면 0이 될 때까지 브레이크 감속
+		along = move_toward(along, move.length() * top_speed, (ACCEL_GROUND if along >= 0.0 else DECEL_GROUND) * delta)
+		horiz = dir * along + side
 	else:
-		horiz = horiz.move_toward(move * top_speed, accel * delta)
+		horiz = horiz.move_toward(move * top_speed, (DECEL_STOP if on_floor else ACCEL_AIR) * delta)
 
 	var vy := velocity.y
 	if on_floor:
@@ -96,8 +99,10 @@ func simulate(input: PlayerInput, delta: float, world_tick := 0) -> void:
 		vy = JUMP_VELOCITY * (JUMP_BOOST_MULT if jump_boost_time > 0.0 else 1.0)
 		air_time = COYOTE_TIME + 0.001  # 코요테 구간 소진 → 공중 2단 점프 불가
 
+	# 바라보는 방향은 입력 방향 그대로. 부드럽게 도는 건 CharacterVisual이 한 번만 처리한다
+	# (여기서도 보간하면 두 번 늦어져 몸이 굼뜨게 돈다).
 	if move.length_squared() > 0.0004:
-		facing_yaw = lerp_angle(facing_yaw, atan2(move.x, move.y), 1.0 - exp(-TURN_SPEED * delta))
+		facing_yaw = atan2(move.x, move.y)
 
 	velocity = Vector3(horiz.x, vy, horiz.y)
 	var start := global_position

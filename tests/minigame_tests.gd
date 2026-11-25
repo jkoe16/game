@@ -20,6 +20,9 @@ static func run(runner: Object) -> void:
 	await test_crumbling_island()
 	test_items_and_events()
 	await test_shield_and_wind()
+	await test_new_hazards()
+	test_attack_items()
+	test_racing_stages()
 
 
 ## 모드 규칙 단위 테스트용 가짜 서버 (위치 고정, 알림 기록)
@@ -31,6 +34,8 @@ class FakeServer extends Node:
 	func notify_player(_id: int, text: String) -> void: notes.append(text)
 	var given: Array = []
 	func give_item(id: int, kind: String, secs: float) -> void: given.append([id, kind, secs])
+	var knocked: Array = []
+	func knock_player(id: int, impulse: Vector3, stun: float) -> void: knocked.append([id, impulse, stun])
 	func transfer_all(_r: String, _t: String) -> void: pass
 
 
@@ -249,7 +254,7 @@ static func test_mover_carry() -> void:
 static func test_pads() -> void:
 	var map := MapRegistry.instantiate("race_track")
 	t.root.add_child(map)
-	var p := _body(map, Vector3(-16, 0.5, 3))
+	var p := _body(map, Vector3(-20, 0.5, 3))
 	var tk := await _run_ticks(map, [p], 0, 20, func(_i: int) -> PlayerInput: return _inp(0, 0))
 	var top := 0.0
 	for i in 60:
@@ -257,7 +262,7 @@ static func test_pads() -> void:
 		top = maxf(top, Vector2(p.velocity.x, p.velocity.z).length())
 	t.check(top > PlayerBody.WALK_SPEED * 1.4, "boost pad raises top speed", "%.2f" % top)
 
-	var q := _body(map, Vector3(-5, 0.5, 31))
+	var q := _body(map, Vector3(-3, 0.5, 24))
 	var max_y := 0.0
 	for i in 60:
 		tk = await _run_ticks(map, [q], tk, 1, func(_i: int) -> PlayerInput: return _inp(0, 0))
@@ -318,12 +323,15 @@ static func test_items_and_events() -> void:
 	mode.on_player_joined(1, "A")
 	mode._begin_countdown()
 	mode.server_tick(mode.phase_end_tick)
-	t.check(mode.items.size() == 4 and mode.event != "", "round starts with 4 item boxes and a random event", "%d %s" % [mode.items.size(), mode.event])
+	t.check(mode.items.size() == map.item_spawns.size() and mode.items.size() >= 6 and mode.event != "", "round starts with item boxes and a random event", "%d %s" % [mode.items.size(), mode.event])
+	t.check(mode.items.all(func(x: Array) -> bool: return GameMode.ITEM_KINDS[x[4]] == "mystery"), "race boxes are mystery boxes")
 	var it: Array = mode.items[0]
 	srv.pos[1] = Vector3(it[0], it[1] - 0.8, it[2])
-	var before := srv.given.size()
+	var before := srv.given.size() + srv.knocked.size()
+	var notes_before := srv.notes.size()
 	mode.server_tick(mode.tick + 1)
-	t.check(srv.given.size() == before + 1 and mode.items[0][3] == 0, "touching a box gives an item and removes the box")
+	# 혼자면 번개는 안 나오고, 충격파는 맞을 사람이 없어 알림만 뜬다
+	t.check(mode.items[0][3] == 0 and srv.notes.size() > notes_before and srv.given.size() + srv.knocked.size() >= before, "touching a box uses an item and removes the box", str(srv.notes))
 	srv.pos[1] = Vector3(0, -100, 0)
 	mode.server_tick(mode.tick + mode.item_respawn_ticks + 1)
 	t.check(mode.items[0][3] == 1, "box comes back later")
@@ -363,3 +371,117 @@ static func test_shield_and_wind() -> void:
 	t.check(moved > 0.5, "walking against the gust still makes progress", "%.2f m" % moved)
 	map.queue_free()
 	await t.process_frame
+
+
+## 새 장애물: 굴러오는 공·튀어나오는 벽은 맞으면 넘어지고, 사라지는 발판은 사라지면 떨어진다
+static func test_new_hazards() -> void:
+	var map := MapRegistry.instantiate("race_course")
+	t.root.add_child(map)
+	await t.process_frame
+	# 공이 굴러오는 길(x=0) 위에 서서 기다리면 맞는다
+	var p := _body(map, Vector3(0, 0.5, 25))
+	var hit := false
+	var tk := 0
+	for i in 400:
+		tk = await _run_ticks(map, [p], tk, 1, func(_i: int) -> PlayerInput: return _inp(0, 0))
+		if p.stun_time > 0.0:
+			hit = true
+			break
+	t.check(hit and p.velocity.z < 0.0, "rolling ball knocks a standing player back", str(p.velocity))
+	# 쉬운 길(다리) 위 주먹 벽 앞에 서 있으면 다리 밖(-x)으로 밀린다
+	var q := _body(map, Vector3(6.5, 0.5, 62))
+	hit = false
+	for i in 400:
+		tk = await _run_ticks(map, [q], tk, 1, func(_i: int) -> PlayerInput: return _inp(0, 0))
+		if q.stun_time > 0.0:
+			hit = true
+			break
+	t.check(hit and q.velocity.x < -5.0, "pusher wall shoves player off the bridge", str(q.velocity))
+	# 사라지는 발판
+	var bl: Dictionary = map.blinkers[0]
+	var solid_tick := -1
+	var gone_tick := -1
+	for k in 400:
+		if solid_tick < 0 and map.blinker_solid(bl, k) and map.blinker_solid(bl, k + 60):
+			solid_tick = k
+		if solid_tick >= 0 and k > solid_tick and not map.blinker_solid(bl, k):
+			gone_tick = k
+			break
+	var pos: Vector3 = (bl["body"] as Node3D).position + Vector3(0, 1.0, 0)
+	var r := _body(map, pos)
+	await _run_ticks(map, [r], solid_tick, 30, func(_i: int) -> PlayerInput: return _inp(0, 0))
+	t.check(r.global_position.y > -0.2, "standing on a solid blink tile is fine", str(r.global_position))
+	r.teleport(pos)
+	await _run_ticks(map, [r], gone_tick, 40, func(_i: int) -> PlayerInput: return _inp(0, 0))
+	t.check(r.global_position.y < -1.0, "blink tile vanishes and player falls", str(r.global_position))
+	# 결정성: 같은 입력이면 공·벽·발판이 있어도 결과가 같다
+	var res: Array = []
+	for run in 2:
+		var b := _body(map, Vector3(0, 0.5, 78))
+		await _run_ticks(map, [b], 500, 200, func(i: int) -> PlayerInput: return _inp(sin(i * 0.07) * 0.4, 1, i % 30 == 0))
+		res.append(b.global_position)
+		b.queue_free()
+	t.check((res[0] as Vector3).distance_to(res[1]) < 0.001, "blink tiles are deterministic", "%s vs %s" % res)
+	map.queue_free()
+	await t.process_frame
+
+
+## 번개(앞사람 모두 감전)·충격파(주변 밀어내기)·물음표 상자의 순위별 확률
+static func test_attack_items() -> void:
+	var map := MapRegistry.instantiate("race_course")
+	map._ready()
+	var srv := FakeServer.new()
+	var mode := ModeRegistry.create("obstacle_race")
+	mode.setup(srv, map, {"min_players": 1})
+	for i in 4:
+		mode.on_player_joined(i + 1, "P%d" % (i + 1))
+	mode._begin_countdown()
+	mode.server_tick(mode.phase_end_tick)
+	# 진행도: 1이 1등, 4가 꼴찌
+	for i in 4:
+		mode.entries[i + 1]["progress"] = 0.8 - i * 0.2
+		srv.pos[i + 1] = Vector3(i * 2.0, 0, 50)
+	var ranked: Array = mode._ranked()
+	mode._use_bolt(ranked, mode.entries[4])
+	var ids := srv.knocked.map(func(k: Array) -> int: return k[0])
+	t.check(ids.size() == 3 and not ids.has(4), "bolt from last place stuns everyone ahead", str(ids))
+	srv.knocked.clear()
+	mode._use_bolt(ranked, mode.entries[1])
+	t.check(srv.knocked.is_empty(), "bolt from the leader hits no one")
+	srv.pos[1] = Vector3(0, 0, 50)
+	srv.pos[2] = Vector3(3, 0, 50)
+	srv.pos[3] = Vector3(20, 0, 50)
+	srv.pos[4] = Vector3(0, 0, 53)
+	srv.knocked.clear()
+	mode._use_shock(mode.entries[1])
+	ids = srv.knocked.map(func(k: Array) -> int: return k[0])
+	t.check(ids.size() == 2 and ids.has(2) and ids.has(4), "shock knocks only nearby players", str(ids))
+	t.check(srv.knocked.size() > 0 and (srv.knocked[0][1] as Vector3).x > 5.0, "shock pushes away from the user", str(srv.knocked))
+	var lead_bolts := 0
+	var last_bolts := 0
+	for i in 400:
+		if mode._mystery_kind(ranked, mode.entries[1]) == "bolt":
+			lead_bolts += 1
+		if mode._mystery_kind(ranked, mode.entries[4]) == "bolt":
+			last_bolts += 1
+	t.check(lead_bolts == 0 and last_bolts > 120, "leader never rolls a bolt, last place often does", "%d / %d" % [lead_bolts, last_bolts])
+	mode.free()
+	map.free()
+	srv.free()
+
+
+## 레이싱: 공·벽은 정해진 시간 전엔 없고, 그 뒤에 나타난다. 지름길 다리 위에 설 수 있다
+static func test_racing_stages() -> void:
+	var map := MapRegistry.instantiate("race_track") as RaceTrackMap
+	map._ready()
+	map.round_start_tick = 1000
+	var r: Dictionary = map.rollers[0]
+	var w: Dictionary = map.pushers[0]
+	t.check(not map.hazard_active(r["from"], 1000 + 10 * 60) and map.hazard_active(r["from"], 1000 + 31 * 60), "rollers appear after 30s")
+	t.check(not map.hazard_active(w["from"], 1000 + 50 * 60) and map.hazard_active(w["from"], 1000 + 61 * 60), "pusher walls appear after 60s")
+	var early := false
+	for k in 300:
+		if map.roller_hit(r, map.roller_pos(r, 1000 + k), 1000 + k) != Vector3.ZERO:
+			early = true
+	t.check(not early, "inactive roller never hits")
+	map.free()

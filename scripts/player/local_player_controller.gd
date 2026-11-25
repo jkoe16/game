@@ -223,4 +223,13 @@ func _objective_input() -> PlayerInput:
 	# 목표가 높이 있거나, 막혔거나, 주기적으로 점프 (구멍/턱 넘기)
 	var near := to.length() < 1.5
 	inp.jump = _stuck_ticks > 8 or target.y - body.global_position.y > 0.8 or (seq % 40 == 0 and not near)
+	# 장애물 피하기 (굴러오는 공은 점프, 튀어나올 벽 앞에서는 기다림)
+	if map and to.length() > 0.6:
+		var hint := map.bot_hint(body.global_position, Vector3(to.x, 0, to.y).normalized(), world_tick_for(seq + 1))
+		if hint == 1:
+			inp.jump = true
+		elif hint == 2:
+			inp.set_move(Vector2.ZERO)
+			inp.jump = false
+			_stuck_ticks = 0
 	return inp

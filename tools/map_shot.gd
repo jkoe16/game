@@ -22,7 +22,11 @@ func _initialize() -> void:
 	var l := str(a.get("look", "0,0,0")).split_floats(",")
 	cam.look_at_from_position(Vector3(c[0], c[1], c[2]), Vector3(l[0], l[1], l[2]))
 	cam.current = true
+	var tk := int(a.get("tick", "0"))
+	map.round_start_tick = 1
 	for f in 40:
+		if tk > 0:
+			map.update_world(tk + f)
 		await process_frame
 	await RenderingServer.frame_post_draw
 	print("STATS draw_calls=%d objects=%d" % [Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME), Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME)])

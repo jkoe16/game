@@ -186,7 +186,7 @@ case "$SCENARIO" in
     run racer 27 --connect=127.0.0.1:17790 --nickname=Racer --bot=objective --drop-at=9 --drop-for=1.5
     ;;
   offline)
-    run offline_race 70 --offline=obstacle_race --bot=objective
+    run offline_race 110 --offline=obstacle_race --bot=objective  # 봇은 공·주먹 벽을 피하지 않아 자주 넘어진다
     run offline_portal 25 --offline --bot=objective --bot-portal=obstacle_race
     ;;
   touch)

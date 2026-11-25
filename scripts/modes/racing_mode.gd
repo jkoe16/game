@@ -1,7 +1,7 @@
 class_name RacingMode
 extends GameMode
 ## 레이싱(달리기): 순환 트랙 3바퀴. 체크포인트를 순서대로 통과해야 바퀴가 인정된다(지름길 방지).
-## 부스트 패드·점프 패드 활용. 완주 순서로 순위.
+## 부스트 패드·점프 패드·지름길 다리 활용. 30초·60초에 새 장애물이 나온다. 완주 순서로 순위.
 
 const LAPS := 3
 const FINISH_WINDOW := 25
@@ -9,6 +9,7 @@ const FINISH_WINDOW := 25
 
 func _init() -> void:
 	round_ticks = 180 * 60
+	mystery_items = true
 
 
 func mode_id() -> String:
@@ -18,7 +19,7 @@ func title() -> String:
 	return "레이싱"
 
 func rules_text() -> String:
-	return "트랙 %d바퀴! 노란 부스터로 빨라지고, 초록 점프대로 벽을 넘고, 남쪽 막대는 점프! ? 상자 = 아이템" % LAPS
+	return "트랙 %d바퀴! 부스터·점프대·지름길 다리를 노려요. ? 상자: 뒤처질수록 번개(앞사람 감전)가 잘 나와요. 시간이 지나면 장애물이 늘어나요" % LAPS
 
 
 func _init_entry(e: Dictionary) -> void:
@@ -29,6 +30,11 @@ func _init_entry(e: Dictionary) -> void:
 
 func _mode_tick() -> void:
 	var m := map as RaceTrackMap
+	var el := tick - round_start_tick
+	if el == int(RaceTrackMap.STAGE2_SEC * 60):
+		announce("2단계! 골목에서 공이 굴러와요")
+	elif el == int(RaceTrackMap.STAGE3_SEC * 60):
+		announce("3단계! 동쪽 직선에 밀어내는 벽 등장")
 	for e in entries.values():
 		if e["status"] != "playing":
 			continue

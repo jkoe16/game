@@ -8,6 +8,7 @@ const FINISH_WINDOW := 25
 
 func _init() -> void:
 	round_ticks = 150 * 60
+	mystery_items = true
 
 
 func mode_id() -> String:
@@ -17,7 +18,7 @@ func title() -> String:
 	return "장애물 레이스"
 
 func rules_text() -> String:
-	return "망치를 점프로 넘고 결승선까지! ? 상자는 속도·점프·보호막 아이템. 떨어져도 체크포인트에서 다시 시작"
+	return "공은 점프로 넘고, 주먹 벽과 사라지는 발판을 조심! ? 상자: 뒤처질수록 번개(앞사람 감전)가 잘 나와요. 떨어지면 체크포인트부터"
 
 
 func _init_entry(e: Dictionary) -> void:

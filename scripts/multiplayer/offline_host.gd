@@ -90,5 +90,10 @@ func give_item(peer_id: int, kind: String, secs: float) -> void:
 		GameServer._apply_item(client.local_player, kind, secs)
 
 
+func knock_player(peer_id: int, impulse: Vector3, stun: float) -> void:
+	if peer_id == PEER_ID and client.local_player:
+		client.local_player.knock(impulse, stun)
+
+
 func notify_player(_peer_id: int, text: String) -> void:
 	client.status_changed.emit(text)

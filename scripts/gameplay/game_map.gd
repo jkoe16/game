@@ -13,7 +13,8 @@ var auto_underside := true
 ## 아이템 상자 위치 (모드가 라운드마다 여기에 상자를 놓는다)
 var item_spawns: Array[Vector3] = []
 var _item_nodes: Array = []
-const ITEM_COLORS := [Color(1.0, 0.75, 0.25), Color(0.45, 0.95, 0.6), Color(0.55, 0.75, 1.0)]  # 속도·점프·보호막
+## 속도·점프·보호막·번개·충격파·물음표(줍는 순간 순위에 따라 정해짐)
+const ITEM_COLORS := [Color(1.0, 0.75, 0.25), Color(0.45, 0.95, 0.6), Color(0.55, 0.75, 1.0), Color(1.0, 0.95, 0.3), Color(1.0, 0.4, 0.55), Color(0.95, 0.6, 1.0)]
 var is_headless := DisplayServer.get_name() == "headless"
 
 # ---- 동적 월드 (틱 번호로 결정론적으로 계산 → 서버/클라이언트 동기화 메시지 불필요)
@@ -678,6 +679,218 @@ func set_gate_open(i: int, open: bool) -> void:
 			c.disabled = open
 
 
+# ---------------------------------------------------------------- 추가 장애물 (모두 틱 번호로 결정론적 계산)
+var pushers: Array[Dictionary] = []    # 옆에서 튀어나와 밀어내는 벽
+var rollers: Array[Dictionary] = []    # 굴러오는 공
+var blinkers: Array[Dictionary] = []   # 사라졌다 나타나는 발판
+
+## 시간 제한 장애물: from_sec > 0 이면 라운드 시작 후 from_sec초부터 나타난다 (레이싱 후반 강화용)
+func hazard_active(from_sec: float, tick: int) -> bool:
+	if from_sec <= 0.0:
+		return true
+	return round_start_tick > 0 and tick - round_start_tick >= int(from_sec * 60.0)
+
+
+## 밀어내는 벽. rest = 쉬는 위치(벽 안), dir = 튀어나오는 방향(XZ 단위), travel = 튀어나오는 거리.
+## 한 주기: 쉼 → 0.45초 전 흔들림 경고 → 빠르게 튀어나옴 → 잠깐 멈춤 → 천천히 들어감
+func add_pusher(rest: Vector3, size: Vector3, dir: Vector3, travel: float, period_sec: float, phase := 0.0, from_sec := 0.0, color := Color(1.0, 0.5, 0.35)) -> void:
+	var node := Node3D.new()
+	node.position = rest
+	node.set_meta("dynamic", true)
+	add_child(node)
+	if not is_headless:
+		var bm := BoxMesh.new()
+		bm.size = size
+		add_mesh(bm, Vector3.ZERO, color, Vector3.ZERO, Vector3.ONE, node)
+		# 앞면 장갑 (밀어내는 쪽)
+		var face := BoxMesh.new()
+		face.size = Vector3(size.x * 0.8 if absf(dir.x) < 0.5 else 0.25, size.y * 0.8, size.z * 0.8 if absf(dir.z) < 0.5 else 0.25)
+		add_mesh(face, dir * ((size.x if absf(dir.x) > 0.5 else size.z) * 0.5 + 0.1), Color(1, 0.95, 0.9), Vector3.ZERO, Vector3.ONE, node)
+		# 벽 속 하우징 (고정)
+		var hb := BoxMesh.new()
+		hb.size = size + Vector3(0.3, 0.3, 0.3)
+		add_mesh(hb, rest - dir * ((size.x if absf(dir.x) > 0.5 else size.z) * 0.6), color.darkened(0.45))
+	pushers.append({"node": node, "rest": rest, "size": size, "dir": dir.normalized(), "travel": travel,
+		"period": period_sec * 60.0, "phase": phase, "from": from_sec})
+
+
+## 0(들어감) ~ 1(다 튀어나옴)
+func pusher_out(s: Dictionary, tick: int) -> float:
+	var u := fposmod(float(tick) / s["period"] + s["phase"], 1.0)
+	if u < 0.55:
+		return 0.0
+	if u < 0.62:
+		return (u - 0.55) / 0.07
+	if u < 0.78:
+		return 1.0
+	return 1.0 - (u - 0.78) / 0.22
+
+
+func pusher_hit(s: Dictionary, p: Vector3, tick: int) -> Vector3:
+	if not hazard_active(s["from"], tick):
+		return Vector3.ZERO
+	# 튀어나오는 순간과 멈춰 있는 동안만 밀어낸다 (천천히 들어가는 동안은 안전)
+	var u := fposmod(float(tick) / s["period"] + s["phase"], 1.0)
+	var out := pusher_out(s, tick)
+	if out <= 0.05 or u >= 0.8:
+		return Vector3.ZERO
+	var c: Vector3 = s["rest"] + s["dir"] * s["travel"] * out
+	var h: Vector3 = s["size"] * 0.5
+	if absf(p.x - c.x) > h.x + PLAYER_RADIUS or absf(p.z - c.z) > h.z + PLAYER_RADIUS:
+		return Vector3.ZERO
+	if p.y > c.y + h.y or p.y + PLAYER_HEIGHT < c.y - h.y:
+		return Vector3.ZERO
+	var d: Vector3 = s["dir"]
+	return Vector3(d.x * 11.0, 6.5, d.z * 11.0)
+
+
+## 굴러오는 공: a → b 로 period_sec 동안 굴러가고, 끝나면 a에서 다시 나온다
+func add_roller(a: Vector3, b: Vector3, radius: float, period_sec: float, phase := 0.0, from_sec := 0.0, color := Color(0.95, 0.35, 0.55)) -> void:
+	var node := Node3D.new()
+	node.set_meta("dynamic", true)
+	node.position = a
+	add_child(node)
+	if not is_headless:
+		add_mesh(sphere_mesh(radius, 18), Vector3.ZERO, color, Vector3.ZERO, Vector3.ONE, node)
+		var band := cyl_mesh(radius * 1.02, radius * 1.02, radius * 0.45, 18)
+		add_mesh(band, Vector3.ZERO, Color(1, 1, 1), Vector3(0, 0, 90), Vector3.ONE, node)
+	rollers.append({"node": node, "a": a, "b": b, "r": radius, "period": period_sec * 60.0, "phase": phase, "from": from_sec})
+
+
+func roller_pos(s: Dictionary, tick: int) -> Vector3:
+	var u := fposmod(float(tick) / s["period"] + s["phase"], 1.0)
+	return (s["a"] as Vector3).lerp(s["b"], u)
+
+
+func roller_hit(s: Dictionary, p: Vector3, tick: int) -> Vector3:
+	if not hazard_active(s["from"], tick):
+		return Vector3.ZERO
+	var c := roller_pos(s, tick)
+	var r: float = s["r"]
+	if p.y > c.y + r or p.y + PLAYER_HEIGHT < c.y - r:
+		return Vector3.ZERO
+	var rel := Vector2(p.x - c.x, p.z - c.z)
+	if rel.length() > r + PLAYER_RADIUS:
+		return Vector3.ZERO
+	var roll := Vector2(s["b"].x - s["a"].x, s["b"].z - s["a"].z).normalized()
+	var side := rel - roll * rel.dot(roll)
+	var away := (roll + side.normalized() * 0.5).normalized() if side.length() > 0.01 else roll
+	return Vector3(away.x * 9.0, 7.5, away.y * 9.0)
+
+
+## 사라졌다 나타나는 발판: period_sec 주기 중 앞쪽 on_frac 동안 단단하고, 사라지기 0.9초 전부터 깜빡인다
+func add_blinker(pos: Vector3, size: Vector3, period_sec: float, phase := 0.0, on_frac := 0.62, color := Color(0.6, 0.9, 1.0)) -> void:
+	var body := add_box(pos, size, color)
+	body.set_meta("dynamic", true)
+	var shape: CollisionShape3D = null
+	var mesh: MeshInstance3D = null
+	for c in body.get_children():
+		if c is CollisionShape3D:
+			shape = c
+		elif c is MeshInstance3D and mesh == null:
+			mesh = c
+	blinkers.append({"body": body, "shape": shape, "mesh": mesh, "color": color, "period": period_sec * 60.0,
+		"phase": phase, "on": on_frac, "solid": true, "warn": false})
+
+
+func blinker_solid(s: Dictionary, tick: int) -> bool:
+	return fposmod(float(tick) / s["period"] + s["phase"], 1.0) < s["on"]
+
+
+func _update_hazards(tick: int) -> void:
+	for s in pushers:
+		var act := hazard_active(s["from"], tick)
+		var n: Node3D = s["node"]
+		n.visible = act
+		if is_headless or not act:
+			continue
+		var u := fposmod(float(tick) / s["period"] + s["phase"], 1.0)
+		var shake := Vector3.ZERO
+		if u > 0.42 and u < 0.55:  # 튀어나오기 직전 덜덜 떨림 (경고)
+			shake = Vector3(sin(tick * 2.1), 0, cos(tick * 1.7)) * 0.06
+		n.position = (s["rest"] as Vector3) + (s["dir"] as Vector3) * s["travel"] * pusher_out(s, tick) + shake
+	for s in rollers:
+		var act := hazard_active(s["from"], tick)
+		var n: Node3D = s["node"]
+		n.visible = act
+		if not act:
+			continue
+		var c := roller_pos(s, tick)
+		n.position = c
+		if not is_headless:
+			var roll := ((s["b"] as Vector3) - (s["a"] as Vector3)).normalized()
+			var dist := ((s["a"] as Vector3).distance_to(c)) / float(s["r"])
+			n.basis = Basis(Vector3.UP.cross(roll).normalized() if absf(roll.y) < 0.9 else Vector3.RIGHT, dist)
+	for s in blinkers:
+		var solid := blinker_solid(s, tick)
+		if solid != s["solid"]:
+			s["solid"] = solid
+			var cs: CollisionShape3D = s["shape"]
+			cs.set_deferred("disabled", not solid)
+			cs.disabled = not solid
+		if is_headless:
+			continue
+		var body: Node3D = s["body"]
+		body.visible = solid
+		var u := fposmod(float(tick) / s["period"] + s["phase"], 1.0)
+		var warn: bool = solid and (s["on"] - u) * s["period"] < 54.0  # 사라지기 0.9초 전
+		var mi: MeshInstance3D = s["mesh"]
+		if mi:
+			mi.material_override = toon_material(Color(1.0, 0.5, 0.45) if warn and int(tick / 6) % 2 == 0 else s["color"])
+
+
+## 테스트/AI 봇용 장애물 힌트: 0 = 그냥 감, 1 = 지금 점프, 2 = 멈춰서 기다림
+func bot_hint(p: Vector3, dir: Vector3, tick: int) -> int:
+	for s in rollers:
+		if not hazard_active(s["from"], tick):
+			continue
+		var c := roller_pos(s, tick)
+		var rel := Vector2(c.x - p.x, c.z - p.z)
+		var r: float = s["r"]
+		if absf(c.y - p.y) < 2.0 and rel.length() < 3.2 + r and rel.dot(Vector2(dir.x, dir.z)) > -0.3:
+			var side := absf(rel.x * dir.z - rel.y * dir.x)
+			if side < r + PLAYER_RADIUS + 0.3:
+				return 1
+	for s in pushers:
+		if not hazard_active(s["from"], tick):
+			continue
+		var c: Vector3 = s["rest"] + s["dir"] * s["travel"]
+		var h: Vector3 = s["size"] * 0.5 + Vector3(PLAYER_RADIUS, 0, PLAYER_RADIUS)
+		var inside := absf(p.x - c.x) <= h.x and absf(p.z - c.z) <= h.z
+		var ahead := p + dir * 1.6
+		var soon := absf(ahead.x - c.x) <= h.x and absf(ahead.z - c.z) <= h.z
+		if soon and not inside and absf(p.y - c.y) < 2.5:
+			var u := fposmod(float(tick) / s["period"] + s["phase"], 1.0)
+			if u > 0.3 and u < 0.8:
+				return 2
+	for s in blinkers:
+		var body: Node3D = s["body"]
+		var ahead := p + dir * 1.5
+		var bp := body.position
+		var bs: Vector3 = (s["shape"] as CollisionShape3D).shape.size * 0.5
+		var on_it := absf(p.x - bp.x) <= bs.x and absf(p.z - bp.z) <= bs.z
+		if on_it or absf(ahead.x - bp.x) > bs.x or absf(ahead.z - bp.z) > bs.z:
+			continue
+		# 다음 발판이 곧 사라지거나 아직 없으면 기다린다
+		if not blinker_solid(s, tick + 30) or not blinker_solid(s, tick):
+			return 2
+	return 0
+
+
+func _hazard_knock(body: PlayerBody, p: Vector3, tick: int) -> bool:
+	for s in pushers:
+		var hit := pusher_hit(s, p, tick)
+		if hit != Vector3.ZERO:
+			body.knock(hit, 0.7)
+			return true
+	for s in rollers:
+		var hit := roller_hit(s, p, tick)
+		if hit != Vector3.ZERO:
+			body.knock(hit, 0.8)
+			return true
+	return false
+
+
 ## 틱 번호에 맞춰 이동 발판/회전 막대 위치를 설정 (시뮬레이션 직전에 호출)
 ## 아이템 상자 표시 (클라이언트). items: [[x, y, z, alive, kind], ...]
 func render_items(list: Array) -> void:
@@ -719,6 +932,7 @@ func update_world(tick: int) -> void:
 		(movers[i]["node"] as Node3D).global_position = mover_pos(i, tick)
 	for s in sweepers:
 		(s["pivot"] as Node3D).rotation.y = sweeper_angle(s, tick)
+	_update_hazards(tick)
 
 
 ## 이동 직전: 이동 발판 위에 서 있으면 발판 이동량만큼 함께 이동
@@ -754,6 +968,7 @@ func post_move(body: PlayerBody, tick: int) -> void:
 		if hit != Vector3.ZERO:
 			body.knock(hit, 0.7)
 			return
+	_hazard_knock(body, p, tick)
 
 
 ## 회전 막대 충돌 판정. 맞으면 넉백 벡터, 아니면 ZERO

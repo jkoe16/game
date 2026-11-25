@@ -724,6 +724,13 @@ static func _apply_item(body: PlayerBody, kind: String, secs: float) -> void:
 			body.shield_time = maxf(body.shield_time, secs)
 
 
+## 모드가 플레이어를 넘어뜨린다 (번개·충격파 아이템). 보호막이면 막힌다. 클라이언트는 스냅샷 보정으로 따라온다
+func knock_player(peer_id: int, impulse: Vector3, stun: float) -> void:
+	var sp: ServerPlayer = players.get(peer_id)
+	if sp:
+		sp.body.knock(impulse, stun)
+
+
 func notify_player(peer_id: int, text: String) -> void:
 	var sp: ServerPlayer = players.get(peer_id)
 	if sp and sp.away_since_ms > 0:

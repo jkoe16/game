@@ -28,13 +28,21 @@ var results_ticks := 8 * 60
 var lobby_route := ""
 
 # ---- 공통 재미 요소: 아이템 상자 + 판마다 랜덤 이벤트
-const ITEM_KINDS := ["speed", "jump", "shield"]
-const ITEM_NAMES := {"speed": "속도 UP", "jump": "점프 강화", "shield": "보호막"}
+## 순서 = 상자 색 번호 (GameMap.ITEM_COLORS). "mystery"는 줍는 순간 순위에 따라 정해지는 상자
+const ITEM_KINDS := ["speed", "jump", "shield", "bolt", "shock", "mystery"]
+const ITEM_NAMES := {"speed": "속도 UP", "jump": "점프 강화", "shield": "보호막", "bolt": "번개", "shock": "충격파"}
+## 레이스용 물음표 상자의 순위별 확률 가중치 [속도, 점프, 보호막, 번개, 충격파]: 1등 → 꼴찌
+const MYSTERY_LEAD := [2.0, 2.0, 3.0, 0.0, 2.0]
+const MYSTERY_LAST := [3.0, 1.0, 1.0, 4.0, 1.0]
+const BOLT_STUN := 1.3
+const SHOCK_RADIUS := 6.0
 const ITEM_PICK_RADIUS := 1.4
 ## [[x, y, z, alive(0/1), kind_index], ...] (맵의 item_spawns 위치)
 var items: Array = []
 var _item_back := {}   # 아이템 번호 → 다시 나타날 틱
 var item_respawn_ticks := 8 * 60
+## 레이스 모드: 상자는 물음표, 줍는 순간 순위로 아이템이 정해진다 (뒤처질수록 번개가 잘 나온다)
+var mystery_items := false
 ## 이번 판 랜덤 이벤트 이름 ("" = 없음)
 var event := ""
 var _rng_round := RandomNumberGenerator.new()
@@ -228,7 +236,7 @@ func _start_extras() -> void:
 	_item_back = {}
 	for i in map.item_spawns.size():
 		var p: Vector3 = map.item_spawns[i]
-		items.append([p.x, p.y, p.z, 1, _rng_round.randi() % ITEM_KINDS.size()])
+		items.append([p.x, p.y, p.z, 1, _box_kind()])
 	var pool := event_pool()
 	event = pool[_rng_round.randi() % pool.size()] if not pool.is_empty() else ""
 	if event != "":
@@ -242,7 +250,7 @@ func _items_tick() -> void:
 		if it[3] == 0:
 			if tick >= int(_item_back.get(i, 0)):
 				it[3] = 1
-				it[4] = _rng_round.randi() % ITEM_KINDS.size()
+				it[4] = _box_kind()
 				dirty = true
 			continue
 		var ip := Vector3(it[0], it[1], it[2])
@@ -253,15 +261,78 @@ func _items_tick() -> void:
 			if pos.distance_to(ip) <= ITEM_PICK_RADIUS:
 				it[3] = 0
 				_item_back[i] = tick + item_respawn_ticks
-				var kind: String = ITEM_KINDS[it[4]]
-				# 역전 기회: 뒤처진 절반은 효과가 1.5배 길다
 				var ranked := _ranked()
-				var behind := ranked.size() >= 2 and ranked.find(e) >= ranked.size() / 2
-				var secs: float = {"speed": 3.0, "jump": 6.0, "shield": 6.0}[kind] * (1.5 if behind else 1.0)
-				server.give_item(e["peer_id"], kind, secs)
-				server.notify_player(e["peer_id"], "!%s%s" % [ITEM_NAMES[kind], " (역전 찬스 1.5배!)" if behind else ""])
+				var kind: String = ITEM_KINDS[it[4]]
+				if kind == "mystery":
+					kind = _mystery_kind(ranked, e)
+				if kind == "bolt":
+					_use_bolt(ranked, e)
+				elif kind == "shock":
+					_use_shock(e)
+				else:
+					# 역전 기회: 뒤처진 절반은 효과가 1.5배 길다
+					var behind := ranked.size() >= 2 and ranked.find(e) >= ranked.size() / 2
+					var secs: float = {"speed": 3.0, "jump": 6.0, "shield": 6.0}[kind] * (1.5 if behind else 1.0)
+					server.give_item(e["peer_id"], kind, secs)
+					server.notify_player(e["peer_id"], "!%s%s" % [ITEM_NAMES[kind], " (역전 찬스 1.5배!)" if behind else ""])
 				dirty = true
 				break
+
+
+func _box_kind() -> int:
+	return ITEM_KINDS.size() - 1 if mystery_items else _rng_round.randi() % 3
+
+
+## 순위에 따라 아이템을 고른다: 1등은 번개가 안 나오고, 꼴찌일수록 번개가 잘 나온다
+func _mystery_kind(ranked: Array, e: Dictionary) -> String:
+	var n := ranked.size()
+	var r := float(ranked.find(e)) / float(n - 1) if n >= 2 else 0.0
+	var total := 0.0
+	var w: Array[float] = []
+	for k in 5:
+		var x := lerpf(MYSTERY_LEAD[k], MYSTERY_LAST[k], r)
+		if n < 2 and k == 3:
+			x = 0.0  # 혼자면 번개 의미 없음
+		w.append(x)
+		total += x
+	var roll := _rng_round.randf() * total
+	for k in 5:
+		roll -= w[k]
+		if roll < 0.0:
+			return ITEM_KINDS[k]
+	return ITEM_KINDS[0]
+
+
+## 번개: 나보다 앞선 사람 모두 잠깐 넘어진다 (보호막이면 막힘)
+func _use_bolt(ranked: Array, e: Dictionary) -> void:
+	var mine := ranked.find(e)
+	var hit := 0
+	for i in mine:
+		var o: Dictionary = ranked[i]
+		if o["status"] != "playing":
+			continue
+		hit += 1
+		server.knock_player(o["peer_id"], Vector3(0, 5.0, 0), BOLT_STUN)
+		server.notify_player(o["peer_id"], "!%s의 번개에 맞았다!" % e["nickname"])
+	server.notify_player(e["peer_id"], "!번개! 앞사람 %d명 감전" % hit if hit > 0 else "!번개! (앞에 아무도 없어요)")
+
+
+## 충격파: 내 주변 6m 안의 사람을 멀리 날려 보낸다
+func _use_shock(e: Dictionary) -> void:
+	var me: Vector3 = server.get_player_pos(e["peer_id"])
+	var hit := 0
+	for o in entries.values():
+		if o == e or o["status"] != "playing":
+			continue
+		var op: Vector3 = server.get_player_pos(o["peer_id"])
+		var d := Vector2(op.x - me.x, op.z - me.z)
+		if d.length() > SHOCK_RADIUS or absf(op.y - me.y) > 3.0:
+			continue
+		var away := d.normalized() if d.length() > 0.05 else Vector2(1, 0)
+		server.knock_player(o["peer_id"], Vector3(away.x * 12.0, 7.0, away.y * 12.0), 0.9)
+		server.notify_player(o["peer_id"], "!%s의 충격파!" % e["nickname"])
+		hit += 1
+	server.notify_player(e["peer_id"], "!충격파! %d명 날려버림" % hit if hit > 0 else "!충격파! (주변에 아무도 없어요)")
 
 
 func _begin_countdown() -> void:

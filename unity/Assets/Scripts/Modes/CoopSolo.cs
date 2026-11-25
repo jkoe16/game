@@ -69,14 +69,14 @@ namespace PartyWorld
 
         protected override string ResultText() => _success ? $"성공! {_clearTick / 60f:0}초" : $"시간 초과! {_stage}/3 단계";
 
-        protected override void OnGUI()
+        protected override string SubText
         {
-            base.OnGUI();
-            if (phase != "playing" || _stage >= 3) return;
-            float s = Screen.height / 720f;
-            int need = HoldTicks + _stage * 30;
-            string bar = _hold > 0 ? $"   버티기 {Mathf.CeilToInt((need - _hold) / 60f * 10f) / 10f:0.0}초" : "";
-            Hud.Shadowed(new Rect(0, 48 * s, Screen.width, 36 * s), $"{_stage + 1}번 방{bar}", Hud.Style(Mathf.RoundToInt(22 * s), TextAnchor.UpperCenter));
+            get
+            {
+                if (_stage >= 3) return "";
+                int need = HoldTicks + _stage * 30;
+                return _hold > 0 ? $"{_stage + 1}번 방   버티기 {(need - _hold) / 60f:0.0}초" : $"{_stage + 1}번 방";
+            }
         }
     }
 }

@@ -82,66 +82,43 @@ namespace PartyWorld
         public float SecondsLeft => Mathf.Max(0, phaseEndTick - tick) / 60f;
         public float ElapsedSec => Mathf.Max(0, tick - roundStartTick) / 60f;
 
-        protected virtual void OnGUI()
+        /// <summary>제목 아래 한 줄 (진행·점수 등)</summary>
+        protected virtual string SubText => "";
+
+        protected virtual void Update()
         {
-            float s = Screen.height / 720f;
-            var big = Hud.Style(Mathf.RoundToInt(96 * s), TextAnchor.MiddleCenter);
-            var mid = Hud.Style(Mathf.RoundToInt(26 * s), TextAnchor.UpperCenter);
+            var hud = GameHud.I;
+            if (hud == null) return;
             if (phase == "countdown")
             {
                 int n = Mathf.CeilToInt(SecondsLeft);
-                Hud.Shadowed(new Rect(0, Screen.height * 0.3f, Screen.width, 140 * s), n > 0 ? n.ToString() : "", big);
-                Hud.Shadowed(new Rect(Screen.width * 0.1f, Screen.height * 0.3f + 140 * s, Screen.width * 0.8f, 80 * s), RulesText, mid);
+                hud.SetTop(Title, "");
+                hud.SetBig(n > 0 ? n.ToString() : "", RulesText);
+                hud.HideResults();
             }
             else if (phase == "playing")
             {
                 int left = Mathf.CeilToInt(SecondsLeft);
-                Hud.Shadowed(new Rect(0, 12 * s, Screen.width, 40 * s), $"{Title}   {left / 60}:{left % 60:00}", mid);
+                hud.SetTop($"{Title}   {left / 60}:{left % 60:00}", SubText);
+                hud.SetBig("");
             }
             else if (phase == "results")
             {
-                Hud.Shadowed(new Rect(0, Screen.height * 0.32f, Screen.width, 120 * s), ResultText(), Hud.Style(Mathf.RoundToInt(64 * s), TextAnchor.MiddleCenter));
-                Hud.Shadowed(new Rect(0, Screen.height * 0.32f + 120 * s, Screen.width, 50 * s), $"{Mathf.CeilToInt(SecondsLeft)}초 뒤 광장으로 돌아가요", mid);
+                hud.SetTop(Title, "");
+                hud.SetBig("");
+                string[] lines = ResultText().Split('\n');
+                hud.ShowResults(lines[0], lines.Length > 1 ? string.Join("\n", lines, 1, lines.Length - 1) : "",
+                    $"{Mathf.CeilToInt(SecondsLeft)}초 뒤 광장으로 돌아가요");
             }
         }
-    }
 
-    /// <summary>화면 글자 도우미 (한글 글꼴 사용). 가운데 위 알림도 여기서.</summary>
-    public static class Hud
-    {
-        static string _banner;
-        static float _bannerUntil;
-
-        public static void Banner(string text, float seconds = 2f)
+        protected virtual void OnDestroy()
         {
-            _banner = text;
-            _bannerUntil = Time.time + seconds;
-        }
-
-        public static GUIStyle Style(int size, TextAnchor anchor)
-        {
-            var st = new GUIStyle(GUI.skin.label) { font = GameMap.UIFont, fontSize = size, alignment = anchor, wordWrap = true, fontStyle = FontStyle.Bold };
-            st.normal.textColor = Color.white;
-            return st;
-        }
-
-        public static void Shadowed(Rect r, string text, GUIStyle st)
-        {
-            if (string.IsNullOrEmpty(text)) return;
-            var c = st.normal.textColor;
-            st.normal.textColor = new Color(0.15f, 0.12f, 0.25f, 0.85f);
-            float o = Mathf.Max(2f, st.fontSize * 0.06f);
-            GUI.Label(new Rect(r.x + o, r.y + o, r.width, r.height), text, st);
-            st.normal.textColor = c;
-            GUI.Label(r, text, st);
-        }
-
-        /// <summary>가운데 위 알림 (GameSession 의 OnGUI 가 그린다)</summary>
-        public static void DrawBanner()
-        {
-            if (_banner == null || Time.time > _bannerUntil) return;
-            float s = Screen.height / 720f;
-            Shadowed(new Rect(0, Screen.height * 0.16f, Screen.width, 80 * s), _banner, Style(Mathf.RoundToInt(48 * s), TextAnchor.MiddleCenter));
+            var hud = GameHud.I;
+            if (hud == null) return;
+            hud.SetTop("", "");
+            hud.SetBig("");
+            hud.HideResults();
         }
     }
 }

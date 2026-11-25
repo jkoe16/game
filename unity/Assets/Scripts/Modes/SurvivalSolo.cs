@@ -94,13 +94,6 @@ namespace PartyWorld
             return $"탈락! {_outTick / 60f:0.0}초 버팀\n최고 기록 {_best:0.0}초";
         }
 
-        protected override void OnGUI()
-        {
-            base.OnGUI();
-            if (phase != "playing") return;
-            float s = Screen.height / 720f;
-            string hearts = new string('♥', Mathf.Max(_lives, 0));
-            Hud.Shadowed(new Rect(0, 48 * s, Screen.width, 36 * s), $"목숨 {hearts}", Hud.Style(Mathf.RoundToInt(22 * s), TextAnchor.UpperCenter));
-        }
+        protected override string SubText => $"목숨 {new string('♥', Mathf.Max(_lives, 0))}";
     }
 }

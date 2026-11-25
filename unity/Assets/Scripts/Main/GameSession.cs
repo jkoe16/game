@@ -23,6 +23,7 @@ namespace PartyWorld
         /// <summary>시작할 때 주소의 ?mode=obstacle_race 처럼 바로 미니게임으로 갈 수도 있다</summary>
         public void Begin(string startMode)
         {
+            if (GameHud.I != null) GameHud.I.onExit = LoadLobby;
             if (!string.IsNullOrEmpty(startMode) && StartMode(startMode)) return;
             LoadLobby();
         }
@@ -122,28 +123,20 @@ namespace PartyWorld
                 Hud.Banner("이 게임은 아직 옮기는 중이에요!", 2.5f);
         }
 
-        void OnGUI()
+        void Update()
         {
-            float s = Screen.height / 720f;
+            var hud = GameHud.I;
+            if (hud == null) return;
             // 포털 입장 대기 막대
             if (_holdMode != "" && _holdTicks < HoldTicks && mode == null)
             {
                 string name = _holdMode;
                 foreach (var m in LobbyPlaza.ModePortals) if (m.mode == _holdMode) name = m.name;
-                float w = 320 * s, h = 18 * s;
-                var r = new Rect((Screen.width - w) / 2, Screen.height * 0.68f, w, h);
-                GUI.DrawTexture(r, Texture2D.whiteTexture, ScaleMode.StretchToFill, false, 0, new Color(0, 0, 0, 0.35f), 0, 9 * s);
-                GUI.DrawTexture(new Rect(r.x, r.y, w * _holdTicks / HoldTicks, h), Texture2D.whiteTexture, ScaleMode.StretchToFill, false, 0, new Color(1f, 0.85f, 0.4f), 0, 9 * s);
-                Hud.Shadowed(new Rect(0, r.y - 44 * s, Screen.width, 40 * s), $"{name} 입장 중…", Hud.Style(Mathf.RoundToInt(26 * s), TextAnchor.MiddleCenter));
+                hud.SetHold(name, (float)_holdTicks / HoldTicks);
             }
-            Hud.DrawBanner();
-            // 미니게임 중: 광장으로 나가기 (휴대폰에서도 누를 수 있게 버튼으로)
-            if (mode != null && mode.phase != "results")
-            {
-                var st = new GUIStyle(GUI.skin.button) { font = GameMap.UIFont, fontSize = Mathf.RoundToInt(20 * s) };
-                if (GUI.Button(new Rect(Screen.width - 150 * s, 12 * s, 138 * s, 44 * s), "광장으로", st))
-                    LoadLobby();
-            }
+            else hud.SetHold("", -1f);
+            // 미니게임 중: 광장으로 나가기 버튼 (휴대폰에서도 누를 수 있게)
+            hud.ShowExit(mode != null && mode.phase != "results");
         }
     }
 }

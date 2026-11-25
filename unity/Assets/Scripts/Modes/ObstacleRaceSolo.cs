@@ -56,13 +56,6 @@ namespace PartyWorld
             return $"완주 {_finishTick / 60f:0.0}초\n최고 기록 {_best:0.0}초";
         }
 
-        protected override void OnGUI()
-        {
-            base.OnGUI();
-            if (phase != "playing") return;
-            float s = Screen.height / 720f;
-            Hud.Shadowed(new Rect(0, 48 * s, Screen.width, 36 * s), $"{ElapsedSec:0.0}초   진행 {(int)(_progress * 100)}%",
-                Hud.Style(Mathf.RoundToInt(22 * s), TextAnchor.UpperCenter));
-        }
+        protected override string SubText => $"{ElapsedSec:0.0}초   진행 {(int)(_progress * 100)}%";
     }
 }

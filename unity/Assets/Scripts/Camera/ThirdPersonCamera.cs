@@ -44,6 +44,11 @@ namespace PartyWorld
 
         void Update()
         {
+            if (UiKit.MenuOpen)
+            {
+                if (Cursor.lockState == CursorLockMode.Locked) Cursor.lockState = CursorLockMode.None;
+                return;
+            }
             if (!touchMode)
             {
                 if (Cursor.lockState == CursorLockMode.Locked)
@@ -51,7 +56,7 @@ namespace PartyWorld
                     Vector2 d = InputReader.MouseDelta();
                     if (d != Vector2.zero) RotateBy(new Vector2(d.x, -d.y), mouseSensitivity);
                 }
-                if (InputReader.MouseClicked()) Cursor.lockState = CursorLockMode.Locked;
+                if (InputReader.MouseClicked() && !UiKit.PointerOverUi()) Cursor.lockState = CursorLockMode.Locked;
                 if (InputReader.EscapePressed()) Cursor.lockState = CursorLockMode.None;
                 float sc = InputReader.ScrollY();
                 if (sc > 0.01f) Zoom(-0.6f);

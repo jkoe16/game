@@ -60,8 +60,11 @@ namespace PartyWorld
             playerGo.AddComponent<CharacterController>();
             var body = playerGo.AddComponent<PlayerBody>();
             body.Teleport(spawn);
-            // 외형: 주소 끝 ?color=번호&hat=번호 (없으면 딸기우유 + 새싹, Godot 기본값과 같음)
-            var look = CharacterVisual.Build(UrlInt("color", 0), UrlInt("hat", 0));
+            // 외형: 주소 끝 ?color=번호&hat=번호 > 이 브라우저에 저장된 값 > 딸기우유 + 새싹
+            int color = UrlInt("color", PlayerPrefs.GetInt("color", 0)), hat = UrlInt("hat", PlayerPrefs.GetInt("hat", 0));
+            PlayerPrefs.SetInt("color", Appearance.SanitizeColor(color));
+            PlayerPrefs.SetInt("hat", Appearance.SanitizeHat(hat));
+            var look = CharacterVisual.Build(color, hat);
             look.sourceBody = body;
             look.readEmoteKeys = true;
             body.visual = look.transform;
@@ -79,13 +82,25 @@ namespace PartyWorld
             ctrl.body = body;
             ctrl.cam = cam;
             ctrl.spawnPoint = spawn;
+            var hud = GameHud.Create();
             if (!practice)
             {
                 var session = ctrlGo.AddComponent<GameSession>();
                 session.body = body;
                 session.ctrl = ctrl;
                 ctrl.session = session;
-                session.Begin(UrlString("mode"));
+                string startMode = UrlString("mode");
+                session.Begin(startMode);
+                // 시작 메뉴: 주소로 바로 미니게임에 들어온 경우가 아니면 먼저 연다
+                var menu = MainMenu.Create(body, cam);
+                menu.onPlay = mode =>
+                {
+                    if (mode != "") session.StartMode(mode);
+                    else if (session.mode != null || !(session.map is LobbyPlaza)) session.LoadLobby();
+                };
+                hud.onMenu = menu.Open;
+                if (startMode == "") menu.Open();
+                else menu.Close();
             }
 
             // 휴대폰·태블릿(웹 포함)에서만 터치 버튼 표시. PC 브라우저는 터치 장치가 잡혀도 키보드·마우스로.
@@ -97,7 +112,7 @@ namespace PartyWorld
                 tc.controller = ctrl;
                 tc.cam = cam;
             }
-            ctrlGo.AddComponent<DebugHud>().body = body;
+            if (Application.absoluteURL.Contains("debug")) ctrlGo.AddComponent<DebugHud>().body = body; // ?debug 일 때만 속도·fps
         }
     }
 

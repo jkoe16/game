@@ -73,6 +73,7 @@ namespace PartyWorld
 
         void Update()
         {
+            if (UiKit.MenuOpen) return;
             foreach (var t in ReadTouches())
             {
                 if (t.began)
@@ -136,6 +137,7 @@ namespace PartyWorld
 
         void OnGUI()
         {
+            if (UiKit.MenuOpen) return;
             // GUI 좌표는 위가 0 → y 뒤집기
             Color old = GUI.color;
             Vector2 jc = JumpCenter;

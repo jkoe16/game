@@ -259,7 +259,7 @@ namespace PartyWorld
             root.localPosition = pos;
             root.gameObject.AddComponent<Billboard>();
             Color outline = C(0.15f, 0.12f, 0.25f);
-            float o = size * 0.0009f; // 테두리 두께
+            float o = size * 0.0006f; // 테두리 두께
             Vector2[] offs = { new Vector2(o, 0), new Vector2(-o, 0), new Vector2(0, o), new Vector2(0, -o),
                                new Vector2(o, o) * 0.7f, new Vector2(-o, o) * 0.7f, new Vector2(o, -o) * 0.7f, new Vector2(-o, -o) * 0.7f };
             foreach (var off in offs)

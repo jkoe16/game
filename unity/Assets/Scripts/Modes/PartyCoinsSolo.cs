@@ -116,12 +116,6 @@ namespace PartyWorld
 
         protected override string ResultText() => $"{_score}점!\n최고 기록 {Mathf.Max(_best, 0)}점";
 
-        protected override void OnGUI()
-        {
-            base.OnGUI();
-            if (phase != "playing") return;
-            float s = Screen.height / 720f;
-            Hud.Shadowed(new Rect(0, 48 * s, Screen.width, 40 * s), $"{_score}점{(_bonus ? "  (2배!)" : "")}", Hud.Style(Mathf.RoundToInt(28 * s), TextAnchor.UpperCenter));
-        }
+        protected override string SubText => $"{_score}점{(_bonus ? "  (2배!)" : "")}";
     }
 }

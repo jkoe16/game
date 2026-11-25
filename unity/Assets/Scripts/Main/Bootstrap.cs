@@ -22,14 +22,27 @@ namespace PartyWorld
             foreach (var c in Object.FindObjectsByType<Camera>(FindObjectsSortMode.None))
                 Object.Destroy(c.gameObject);
 
-            PracticeMap.Build();
+            // 기본은 광장(로비). 주소 끝에 ?map=practice 를 붙이면 회색 연습장
+            Vector3 spawn;
+            float killHeight = -25f;
+            if (Application.absoluteURL.Contains("map=practice"))
+            {
+                PracticeMap.Build();
+                spawn = PracticeMap.Spawn;
+            }
+            else
+            {
+                var map = GameMap.Create<LobbyPlaza>();
+                spawn = map.GetSpawnPoint(0);
+                killHeight = map.killHeight;
+            }
 
             // 플레이어
             var playerGo = new GameObject("Player");
             playerGo.layer = PartyLayers.Player;
             playerGo.AddComponent<CharacterController>();
             var body = playerGo.AddComponent<PlayerBody>();
-            body.Teleport(PracticeMap.Spawn);
+            body.Teleport(spawn);
             body.visual = CharacterVisual.Build(new Color(1f, 0.62f, 0.55f)).transform;
 
             // 카메라
@@ -44,7 +57,8 @@ namespace PartyWorld
             var ctrl = ctrlGo.AddComponent<LocalPlayerController>();
             ctrl.body = body;
             ctrl.cam = cam;
-            ctrl.spawnPoint = PracticeMap.Spawn;
+            ctrl.spawnPoint = spawn;
+            ctrl.killHeight = killHeight;
 
             // 휴대폰·태블릿(웹 포함)에서만 터치 버튼 표시. PC 브라우저는 터치 장치가 잡혀도 키보드·마우스로.
             bool touch = Application.isMobilePlatform;
@@ -85,17 +99,17 @@ namespace PartyWorld
         public static GameObject Build(Color bodyColor)
         {
             var root = new GameObject("CharacterVisual");
-            var mat = PracticeMap.Mat(bodyColor);
-            var skin = PracticeMap.Mat(new Color(1f, 0.87f, 0.76f));
+            var mat = GameMap.Toon(bodyColor);
+            var skin = GameMap.Toon(new Color(1f, 0.87f, 0.76f));
 
             var torso = Prim(PrimitiveType.Sphere, root.transform, new Vector3(0f, 0.45f, 0f), new Vector3(0.75f, 0.7f, 0.7f), mat);
             var head = Prim(PrimitiveType.Sphere, root.transform, new Vector3(0f, 1.15f, 0f), new Vector3(0.85f, 0.8f, 0.8f), skin);
             // 눈 (앞 = +Z)
-            var eye = PracticeMap.Mat(new Color(0.15f, 0.12f, 0.2f));
+            var eye = GameMap.Toon(new Color(0.15f, 0.12f, 0.2f));
             Prim(PrimitiveType.Sphere, head.transform, new Vector3(-0.17f, 0.05f, 0.45f), Vector3.one * 0.12f, eye);
             Prim(PrimitiveType.Sphere, head.transform, new Vector3(0.17f, 0.05f, 0.45f), Vector3.one * 0.12f, eye);
             // 새싹 모자
-            var leaf = PracticeMap.Mat(new Color(0.45f, 0.8f, 0.4f));
+            var leaf = GameMap.Toon(new Color(0.45f, 0.8f, 0.4f));
             Prim(PrimitiveType.Sphere, head.transform, new Vector3(0f, 0.55f, 0f), new Vector3(0.12f, 0.2f, 0.12f), leaf);
             // 발
             Prim(PrimitiveType.Sphere, root.transform, new Vector3(-0.18f, 0.08f, 0.05f), new Vector3(0.22f, 0.16f, 0.3f), mat);

@@ -10,6 +10,20 @@ namespace PartyWorld
     /// </summary>
     public static class Bootstrap
     {
+        /// <summary>웹 주소의 ?이름=숫자 값 (없거나 잘못되면 기본값)</summary>
+        static int UrlInt(string key, int def)
+        {
+            string url = Application.absoluteURL;
+            int q = url.IndexOf('?');
+            if (q < 0) return def;
+            foreach (var part in url.Substring(q + 1).Split('&'))
+            {
+                var kv = part.Split('=');
+                if (kv.Length == 2 && kv[0] == key && int.TryParse(kv[1], out int v)) return v;
+            }
+            return def;
+        }
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Start()
         {
@@ -43,7 +57,11 @@ namespace PartyWorld
             playerGo.AddComponent<CharacterController>();
             var body = playerGo.AddComponent<PlayerBody>();
             body.Teleport(spawn);
-            body.visual = CharacterVisual.Build(new Color(1f, 0.62f, 0.55f)).transform;
+            // 외형: 주소 끝 ?color=번호&hat=번호 (없으면 딸기우유 + 새싹, Godot 기본값과 같음)
+            var look = CharacterVisual.Build(UrlInt("color", 0), UrlInt("hat", 0));
+            look.sourceBody = body;
+            look.readEmoteKeys = true;
+            body.visual = look.transform;
 
             // 카메라
             var camGo = new GameObject("PlayerCamera");
@@ -88,46 +106,6 @@ namespace PartyWorld
             var style = new GUIStyle(GUI.skin.label) { fontSize = Mathf.RoundToInt(18 * s) };
             float hs = new Vector2(body.velocity.x, body.velocity.z).magnitude;
             GUI.Label(new Rect(10 * s, 10 * s, 600 * s, 30 * s), $"speed {hs:0.00} m/s   fps {_fps:0}   floor {body.IsOnFloor}", style);
-        }
-    }
-
-    /// <summary>
-    /// 임시 캐릭터 모습 (Godot 판처럼 도형으로 만든 2.5등신). 나중에 모델 파일로 바꾼다.
-    /// </summary>
-    public static class CharacterVisual
-    {
-        public static GameObject Build(Color bodyColor)
-        {
-            var root = new GameObject("CharacterVisual");
-            var mat = GameMap.Toon(bodyColor);
-            var skin = GameMap.Toon(new Color(1f, 0.87f, 0.76f));
-
-            var torso = Prim(PrimitiveType.Sphere, root.transform, new Vector3(0f, 0.45f, 0f), new Vector3(0.75f, 0.7f, 0.7f), mat);
-            var head = Prim(PrimitiveType.Sphere, root.transform, new Vector3(0f, 1.15f, 0f), new Vector3(0.85f, 0.8f, 0.8f), skin);
-            // 눈 (앞 = +Z)
-            var eye = GameMap.Toon(new Color(0.15f, 0.12f, 0.2f));
-            Prim(PrimitiveType.Sphere, head.transform, new Vector3(-0.17f, 0.05f, 0.45f), Vector3.one * 0.12f, eye);
-            Prim(PrimitiveType.Sphere, head.transform, new Vector3(0.17f, 0.05f, 0.45f), Vector3.one * 0.12f, eye);
-            // 새싹 모자
-            var leaf = GameMap.Toon(new Color(0.45f, 0.8f, 0.4f));
-            Prim(PrimitiveType.Sphere, head.transform, new Vector3(0f, 0.55f, 0f), new Vector3(0.12f, 0.2f, 0.12f), leaf);
-            // 발
-            Prim(PrimitiveType.Sphere, root.transform, new Vector3(-0.18f, 0.08f, 0.05f), new Vector3(0.22f, 0.16f, 0.3f), mat);
-            Prim(PrimitiveType.Sphere, root.transform, new Vector3(0.18f, 0.08f, 0.05f), new Vector3(0.22f, 0.16f, 0.3f), mat);
-            return root;
-        }
-
-        static GameObject Prim(PrimitiveType t, Transform parent, Vector3 localPos, Vector3 scale, Material m)
-        {
-            var g = GameObject.CreatePrimitive(t);
-            Object.Destroy(g.GetComponent<Collider>());
-            g.transform.SetParent(parent, false);
-            // 자식의 scale 은 부모 scale 을 상쇄해서 지정한 크기 그대로
-            Vector3 ps = parent.lossyScale;
-            g.transform.localPosition = new Vector3(localPos.x / ps.x, localPos.y / ps.y, localPos.z / ps.z);
-            g.transform.localScale = new Vector3(scale.x / ps.x, scale.y / ps.y, scale.z / ps.z);
-            g.GetComponent<Renderer>().sharedMaterial = m;
-            return g;
         }
     }
 }

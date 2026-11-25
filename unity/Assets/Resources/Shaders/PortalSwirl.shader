@@ -26,7 +26,7 @@ Shader "PartyWorld/PortalSwirl"
                 float core = smoothstep(1, 0, r);
                 float edge = smoothstep(1, 0.82, r);
                 float3 c = lerp(_Color.rgb, float3(1,1,1), swirl * 0.45 + core * core * 0.5);
-                float alpha = edge * (0.25 + 0.5 * swirl) * (0.45 + 0.55 * core);
+                float alpha = edge * (0.2 + 0.4 * swirl) * (0.4 + 0.35 * core);
                 return fixed4(c * alpha, 1);
             }
             ENDCG

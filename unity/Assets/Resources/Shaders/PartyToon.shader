@@ -71,8 +71,8 @@ Shader "PartyWorld/Toon"
                 float3 shade = lerp(_ShadowTint.rgb * (1.0 - _ShadowStrength), float3(1,1,1), lit);
                 // 반대편 하늘빛 보조광 + 하늘(주변광)
                 float fill = saturate(dot(n, -l) * 0.5 + 0.2) * 0.14;
-                float3 ambient = ShadeSH9(float4(n, 1)) * 0.45;
-                float3 col = albedo * (shade * _LightColor0.rgb * 0.82 + ambient + fill * float3(0.75,0.82,1.0));
+                float3 ambient = ShadeSH9(float4(n, 1)) * 0.38;
+                float3 col = albedo * (shade * _LightColor0.rgb * 0.76 + ambient + fill * float3(0.75,0.82,1.0));
                 float rim = pow(1.0 - saturate(dot(n, v)), 2.6);
                 col += albedo * (rim * _RimStrength + saturate(n.y * 0.5 + 0.5) * 0.02);
                 float3 h = normalize(l + v);

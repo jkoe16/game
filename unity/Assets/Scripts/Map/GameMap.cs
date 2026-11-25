@@ -263,11 +263,11 @@ namespace PartyWorld
             Vector2[] offs = { new Vector2(o, 0), new Vector2(-o, 0), new Vector2(0, o), new Vector2(0, -o),
                                new Vector2(o, o) * 0.7f, new Vector2(-o, o) * 0.7f, new Vector2(o, -o) * 0.7f, new Vector2(-o, -o) * 0.7f };
             foreach (var off in offs)
-                MakeText(root, text, size, outline, new Vector3(off.x, off.y, 0.01f));
-            MakeText(root, text, size, color ?? Color.white, Vector3.zero);
+                MakeText(root, text, size, outline, new Vector3(off.x, off.y, 0.01f), 0);
+            MakeText(root, text, size, color ?? Color.white, Vector3.zero, 1); // 테두리 위에 본 글자
         }
 
-        static void MakeText(Transform parent, string text, int size, Color color, Vector3 local)
+        static void MakeText(Transform parent, string text, int size, Color color, Vector3 local, int order)
         {
             var go = new GameObject("t");
             go.transform.SetParent(parent, false);
@@ -282,6 +282,7 @@ namespace PartyWorld
             tm.color = color;
             var mr = go.GetComponent<MeshRenderer>();
             mr.sharedMaterial = TextMaterial;
+            mr.sortingOrder = order;
             mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             mr.receiveShadows = false;
         }

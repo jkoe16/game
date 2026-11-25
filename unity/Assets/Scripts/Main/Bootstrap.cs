@@ -24,6 +24,19 @@ namespace PartyWorld
             return def;
         }
 
+        static string UrlString(string key)
+        {
+            string url = Application.absoluteURL;
+            int q = url.IndexOf('?');
+            if (q < 0) return "";
+            foreach (var part in url.Substring(q + 1).Split('&'))
+            {
+                var kv = part.Split('=');
+                if (kv.Length == 2 && kv[0] == key) return kv[1];
+            }
+            return "";
+        }
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Start()
         {
@@ -36,20 +49,10 @@ namespace PartyWorld
             foreach (var c in Object.FindObjectsByType<Camera>(FindObjectsSortMode.None))
                 Object.Destroy(c.gameObject);
 
-            // 기본은 광장(로비). 주소 끝에 ?map=practice 를 붙이면 회색 연습장
-            Vector3 spawn;
-            float killHeight = -25f;
-            if (Application.absoluteURL.Contains("map=practice"))
-            {
-                PracticeMap.Build();
-                spawn = PracticeMap.Spawn;
-            }
-            else
-            {
-                var map = GameMap.Create<LobbyPlaza>();
-                spawn = map.GetSpawnPoint(0);
-                killHeight = map.killHeight;
-            }
+            // 기본은 광장(로비). ?map=practice 는 회색 연습장, ?mode=obstacle_race 는 바로 미니게임
+            bool practice = Application.absoluteURL.Contains("map=practice");
+            Vector3 spawn = PracticeMap.Spawn;
+            if (practice) PracticeMap.Build();
 
             // 플레이어
             var playerGo = new GameObject("Player");
@@ -76,7 +79,14 @@ namespace PartyWorld
             ctrl.body = body;
             ctrl.cam = cam;
             ctrl.spawnPoint = spawn;
-            ctrl.killHeight = killHeight;
+            if (!practice)
+            {
+                var session = ctrlGo.AddComponent<GameSession>();
+                session.body = body;
+                session.ctrl = ctrl;
+                ctrl.session = session;
+                session.Begin(UrlString("mode"));
+            }
 
             // 휴대폰·태블릿(웹 포함)에서만 터치 버튼 표시. PC 브라우저는 터치 장치가 잡혀도 키보드·마우스로.
             bool touch = Application.isMobilePlatform;

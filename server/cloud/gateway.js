@@ -6,6 +6,10 @@
 //   wss://주소/obstacle_race     → 공개 미니게임 (survival, racing, coop, party 도 같음)
 //   wss://주소/r/K7QP            → 방 K7QP 전용 광장
 //   wss://주소/r/K7QP/racing     → 방 K7QP 전용 미니게임
+//   wss://주소/p/2               → 공개 광장 2번 (빠른 매칭이 1번 광장이 꽉 차면 안내, /p/2/racing 도 같음)
+// HTTP API (메뉴가 접속 전에 사용, CORS 허용)
+//   GET /api/room/K7QP   → { ok, code, exists, players, max_players, full, can_create }
+//   GET /api/quickmatch  → { ok, path, players, max_players }  자리가 남은 공개 광장 경로 ("/" 또는 "/p/2" ...)
 // 서버(방 × 모드)는 누가 접속할 때 켜지고, IDLE_SEC 동안 아무도 없으면 꺼진다 (무료 호스팅의 작은 메모리용).
 // TLS(wss)는 호스팅 서비스(Render, Fly.io 등)가 앞단에서 처리한다.
 //
@@ -18,6 +22,8 @@
 //   IDLE_SEC    빈 서버를 끄기까지 기다리는 시간 (기본 60)
 //   PORT_BASE   내부 포트 시작 번호 (기본 20000)
 //   MINIGAME_ARGS 미니게임 서버 추가 인자 (테스트용, 예: "--min-players=1 --round-sec=8")
+//   LOBBY_MAX   광장 정원 (기본 24 = mode_registry.gd 의 lobby max_players). 빠른 매칭이 꽉 찼는지 판단할 때 사용
+//   MAX_PUBLIC_LOBBIES 공개 광장 최대 개수 (기본 4)
 "use strict";
 const http = require("http");
 const net = require("net");
@@ -31,6 +37,19 @@ const START_TIMEOUT_MS = 30000;
 // scripts/modes/mode_registry.gd 의 모드 ID와 같아야 한다
 const MODES = ["lobby", "obstacle_race", "survival", "racing", "coop", "party"];
 const ROOM_RE = /^[A-Z0-9]{4,8}$/;
+const LOBBY_MAX = parseInt(process.env.LOBBY_MAX || "24", 10);
+const MAX_PUBLIC_LOBBIES = Math.max(1, parseInt(process.env.MAX_PUBLIC_LOBBIES || "4", 10));
+
+// room 키: "" = 공개 광장 1, "#2" = 공개 광장 2, "K7QP" = 친구 방
+function roomPrefix(room) {
+  if (!room) return "";
+  if (room[0] === "#") return `/p/${room.slice(1)}`;
+  return `/r/${room}`;
+}
+
+function roomTag(room) {
+  return !room ? "public" : room[0] === "#" ? `public${room.slice(1)}` : room;
+}
 
 /** 경로 → { room, mode } 또는 null.  room "" = 공개 */
 function parsePath(url) {
@@ -40,6 +59,11 @@ function parsePath(url) {
     if (!parts[1]) return null;
     room = parts[1].toUpperCase();
     if (!ROOM_RE.test(room)) return null;
+    parts.splice(0, 2);
+  } else if (parts[0] === "p") {
+    const n = parseInt(parts[1], 10);
+    if (!/^[0-9]+$/.test(parts[1] || "") || n < 2 || n > MAX_PUBLIC_LOBBIES) return null;
+    room = `#${n}`;
     parts.splice(0, 2);
   }
   if (parts.length > 1) return null;
@@ -76,7 +100,7 @@ function waitForPort(port, child) {
 function startServer(room, mode) {
   const key = `${room}/${mode}`;
   const port = allocPort();
-  const prefix = room ? `/r/${room}` : "";
+  const prefix = roomPrefix(room);
   const args = ["--headless", "--path", process.env.GAME_DIR || ".", "--", "--server", "--transport=ws",
     `--mode=${mode}`, `--port=${port}`];
   if (mode === "lobby") args.push("--routes=gateway", `--route-prefix=${prefix}`);
@@ -86,7 +110,7 @@ function startServer(room, mode) {
   const child = spawn(process.env.GODOT_BIN, args, { stdio: ["ignore", "pipe", "pipe"] });
   const entry = { room, mode, port, child, conns: 0, idleTimer: null, started: new Date().toISOString() };
   servers.set(key, entry);
-  const tag = `[${room || "public"}/${mode}] `;
+  const tag = `[${roomTag(room)}/${mode}] `;
   const log = (d) => d.toString().split(/\r?\n/).filter(Boolean).forEach((l) => console.log(tag + l));
   child.stdout.on("data", log);
   child.stderr.on("data", log);
@@ -109,7 +133,7 @@ function scheduleIdle(entry) {
   entry.idleSince = Date.now();
   entry.idleTimer = setTimeout(() => {
     if (entry.conns === 0) {
-      console.log(`[${entry.room || "public"}/${entry.mode}] idle ${IDLE_SEC}s → stop`);
+      console.log(`[${roomTag(entry.room)}/${entry.mode}] idle ${IDLE_SEC}s → stop`);
       entry.child.kill("SIGTERM");
     }
   }, IDLE_SEC * 1000);
@@ -125,6 +149,36 @@ function freeIdleSlot() {
   return true;
 }
 
+/** 새 서버를 켤 자리가 있는지 (빈 서버를 끄면 생기는 자리 포함) */
+function hasSlot() {
+  return servers.size < MAX_SERVERS || [...servers.values()].some((s) => s.conns === 0);
+}
+
+/** 방 상태: 그 방의 서버(광장·미니게임)가 하나라도 켜져 있으면 있는 방 */
+function roomInfo(room) {
+  let exists = false, players = 0, lobbyPlayers = 0;
+  for (const s of servers.values()) {
+    if (s.room !== room) continue;
+    exists = true;
+    players += s.conns;
+    if (s.mode === "lobby") lobbyPlayers = s.conns;
+  }
+  return { exists, players, lobbyPlayers, full: lobbyPlayers >= LOBBY_MAX };
+}
+
+/** 빠른 매칭: 자리가 남은 공개 광장 중 번호가 가장 작은 곳 (사람이 모이도록). 모두 꽉 차면 사람이 가장 적은 곳 */
+function quickMatch() {
+  let best = null;
+  for (let n = 1; n <= MAX_PUBLIC_LOBBIES; n++) {
+    const room = n === 1 ? "" : `#${n}`;
+    const lobby = servers.get(`${room}/lobby`);
+    const players = lobby ? lobby.conns : 0;
+    if (players < LOBBY_MAX && (lobby || n === 1 || hasSlot())) return { room, players };
+    if (lobby && (!best || players < best.players)) best = { room, players };
+  }
+  return best || { room: "", players: 0 };
+}
+
 function getServer(room, mode) {
   const key = `${room}/${mode}`;
   const existing = servers.get(key);
@@ -136,10 +190,27 @@ function getServer(room, mode) {
 }
 
 // ------------------------------------------------------------ HTTP + WebSocket 프록시
+function sendJson(res, code, obj) {
+  res.writeHead(code, { "content-type": "application/json", "access-control-allow-origin": "*", "cache-control": "no-store" });
+  res.end(JSON.stringify(obj));
+}
+
 const server = http.createServer((req, res) => {
   const path = (req.url || "/").split("?")[0];
+  const roomMatch = path.match(/^\/api\/room\/([^/]+)$/);
+  if (roomMatch) {
+    const code = decodeURIComponent(roomMatch[1]).toUpperCase();
+    if (!ROOM_RE.test(code)) return sendJson(res, 400, { ok: false, error: "bad_code" });
+    const info = roomInfo(code);
+    return sendJson(res, 200, { ok: true, code, exists: info.exists, players: info.players, max_players: LOBBY_MAX,
+      full: info.full, can_create: info.exists || hasSlot() });
+  }
+  if (path === "/api/quickmatch") {
+    const m = quickMatch();
+    return sendJson(res, 200, { ok: true, path: roomPrefix(m.room) || "/", players: m.players, max_players: LOBBY_MAX });
+  }
   if (path === "/healthz" || path === "/") {
-    const list = [...servers.values()].map((s) => ({ room: s.room || "public", mode: s.mode, players: s.conns, started: s.started }));
+    const list = [...servers.values()].map((s) => ({ room: s.room ? s.room.replace("#", "public") : "public", mode: s.mode, players: s.conns, started: s.started }));
     res.writeHead(200, { "content-type": "application/json", "access-control-allow-origin": "*" });
     const version = (process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || "dev").slice(0, 7);
     res.end(JSON.stringify({ ok: true, game: "3D PARTY WORLD", version, servers: list, max_servers: MAX_SERVERS }));

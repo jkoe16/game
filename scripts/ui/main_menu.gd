@@ -20,6 +20,7 @@ var _logout_btn: Button
 var _link_btn: Button
 var _room: LineEdit
 var _room_note: Label
+var _online_buttons: Array[Button] = []
 var _notice: Label
 
 
@@ -110,8 +111,8 @@ func _ready() -> void:
 		var room_row := HBoxContainer.new()
 		room_row.add_theme_constant_override("separation", 8)
 		box.add_child(room_row)
-		var make := _big_button("방 만들기", func() -> void:
-			join_requested.emit(_nick.text.strip_edges(), OnlineConfig.room_url(online_url, OnlineConfig.new_room_code())))
+		var make := _big_button("방 만들기", func() -> void: _create_room(online_url))
+		_online_buttons.append(make)
 		make.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		room_row.add_child(make)
 		_room = LineEdit.new()
@@ -125,6 +126,7 @@ func _ready() -> void:
 		var enter := _big_button("입장", func() -> void: _join_room(online_url))
 		enter.theme_type_variation = "AccentButton"
 		enter.custom_minimum_size = Vector2(90, 64)
+		_online_buttons.append(enter)
 		room_row.add_child(enter)
 		_room_note = Label.new()
 		_room_note.text = "방을 만들면 나오는 코드를 친구에게 알려 주세요"
@@ -136,8 +138,9 @@ func _ready() -> void:
 		_room_note.add_theme_font_size_override("font_size", 15)
 		_room_note.add_theme_color_override("font_color", UiStyle.INK_SOFT)
 		box.add_child(_room_note)
-		var pub := _big_button("공개 광장 입장 (누구나)", func() -> void: join_requested.emit(_nick.text.strip_edges(), online_url))
+		var pub := _big_button("빠른 매칭 (공개 광장, 누구나)", func() -> void: _quick_match(online_url))
 		pub.theme_type_variation = "AccentButton"
+		_online_buttons.append(pub)
 		box.add_child(pub)
 	var practice := HBoxContainer.new()
 	practice.add_theme_constant_override("separation", 8)
@@ -185,10 +188,57 @@ func show_notice(text: String) -> void:
 func _join_room(online_url: String) -> void:
 	var code := OnlineConfig.normalize_room_code(_room.text)
 	if code == "":
-		_room_note.text = "방 코드는 영문/숫자 4~8자예요"
-		_room_note.add_theme_color_override("font_color", Color(0.85, 0.3, 0.35))
+		_set_room_note("방 코드는 영문/숫자 4~8자예요", true)
+		return
+	_set_busy(true, "방을 찾는 중...")
+	var r: Dictionary = await Matchmaking.check_room(self, online_url, code)
+	_set_busy(false)
+	var why := Matchmaking.join_problem(r, code)
+	if why != "":
+		_set_room_note(why, true)
 		return
 	join_requested.emit(_nick.text.strip_edges(), OnlineConfig.room_url(online_url, code))
+
+
+## 방 만들기: 이미 쓰는 코드면 새 코드로 (최대 5번). 서버에 자리가 없으면 안내
+func _create_room(online_url: String) -> void:
+	_set_busy(true, "방을 만드는 중...")
+	var code := OnlineConfig.new_room_code()
+	for i in 5:
+		var r: Dictionary = await Matchmaking.check_room(self, online_url, code)
+		if not r.get("ok", false):
+			break  # 서버가 답하지 않음 → 그냥 접속 (접속 단계에서 서버를 깨움)
+		if not r.get("exists", false):
+			if not r.get("can_create", true):
+				_set_busy(false)
+				_set_room_note("지금 서버에 열린 방이 너무 많아요. 잠시 후 다시 시도해 주세요", true)
+				return
+			break
+		code = OnlineConfig.new_room_code()
+	_set_busy(false)
+	join_requested.emit(_nick.text.strip_edges(), OnlineConfig.room_url(online_url, code))
+
+
+## 빠른 매칭: 자리가 남은 공개 광장으로 (1번 광장이 꽉 차면 2번, 3번...)
+func _quick_match(online_url: String) -> void:
+	_set_busy(true, "자리가 있는 광장을 찾는 중...")
+	var url: String = await Matchmaking.quick_match_url(self, online_url)
+	_set_busy(false)
+	join_requested.emit(_nick.text.strip_edges(), url)
+
+
+func _set_busy(busy: bool, text := "") -> void:
+	for b in _online_buttons:
+		b.disabled = busy
+	if busy:
+		_set_room_note(text, false)
+
+
+func _set_room_note(text: String, is_error: bool) -> void:
+	if _room_note == null:
+		return
+	_room_note.text = text
+	_room_note.add_theme_color_override("font_color", Color(0.85, 0.3, 0.35) if is_error else UiStyle.INK_SOFT)
 
 
 func refresh_account() -> void:

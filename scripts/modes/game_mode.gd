@@ -155,6 +155,19 @@ func on_player_left(peer_id: int) -> void:
 	dirty = true
 
 
+## 재접속: 같은 플레이어가 새 연결(peer_id)로 돌아옴 → 점수·진행도·상태를 그대로 새 번호로 옮긴다
+func on_player_rekeyed(old_id: int, new_id: int) -> void:
+	if entries.has(old_id):
+		var e: Dictionary = entries[old_id]
+		entries.erase(old_id)
+		e["peer_id"] = new_id
+		entries[new_id] = e
+	for r in last_results:
+		if int(r.get("peer_id", 0)) == old_id:
+			r["peer_id"] = new_id
+	dirty = true
+
+
 func is_frozen(peer_id: int) -> bool:
 	if phase == "countdown":
 		return true

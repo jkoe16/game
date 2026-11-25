@@ -147,6 +147,13 @@ func c_emote(emote_id) -> void:
 		server_handler.on_emote(multiplayer.get_remote_sender_id(), emote_id)
 
 
+## 스스로 나가기 (메뉴로 돌아가기 등): 서버가 재접속용으로 자리를 남겨 두지 않고 바로 퇴장 처리
+@rpc("any_peer", "call_remote", "reliable", 0)
+func c_leave() -> void:
+	if multiplayer.is_server() and server_handler:
+		server_handler.on_leave(multiplayer.get_remote_sender_id())
+
+
 # ---------------------------------------------------------------- server → client
 # "authority" 모드: 서버(peer 1)만 호출 가능. 클라이언트가 보낸 호출은 엔진이 거부한다.
 

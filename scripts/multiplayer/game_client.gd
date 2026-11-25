@@ -2,6 +2,10 @@ class_name GameClient
 extends Node
 ## 게임 클라이언트: 서버 접속, 맵/플레이어 생성, 스냅샷 적용, 로컬 예측 및 원격 보간 관리.
 ## offline=true 이면 서버 없이 연습 모드로 같은 맵/이동 코드를 사용한다.
+##
+## 재접속: 입장 때 받은 세션 토큰을 보관해 두었다가, 연결이 갑자기 끊기면(서버 연결 끊김 이벤트 또는
+## 스냅샷이 SNAPSHOT_SILENCE_MS 동안 안 옴) 같은 주소로 다시 접속해 hello에 "resume"으로 보낸다.
+## 서버가 자리를 남겨 두었으면 같은 캐릭터·점수로 이어서 플레이한다. 추방·거절·스스로 나가기·서버 이동은 재접속하지 않는다.
 
 signal status_changed(text: String)
 signal session_ended(reason: String)
@@ -57,6 +61,20 @@ var phases_seen := {}
 var max_frame_ms := 0.0
 
 var _attempts := 0
+## 재접속용 세션 토큰 (서버가 s_welcome에서 줌)
+var session_token := ""
+## 끊긴 뒤 다시 접속하는 중
+var reconnecting := false
+## 재접속 시작 횟수 / 자리를 그대로 이어받은 횟수 (테스트·모니터링)
+var reconnects := 0
+var resumed_count := 0
+## 재접속 직전 내 위치와 다시 들어온 위치의 차 (m, 마지막 재접속 기준)
+var resume_offset := -1.0
+var _pos_before_drop := Vector3.INF
+var _last_snapshot_ms := 0
+var _left := false
+## 다음 접속 시도가 예약돼 있음 (중복 예약·늦게 온 옛 연결 이벤트 무시용)
+var _connect_pending := false
 var _is_headless := DisplayServer.get_name() == "headless"
 
 
@@ -96,7 +114,17 @@ func _on_offline_transfer(target_mode: String) -> void:
 	_start_offline(target_mode)
 
 
+func _schedule_connect(delay: float) -> void:
+	if _connect_pending:
+		return
+	_connect_pending = true
+	get_tree().create_timer(delay).timeout.connect(_connect)
+
+
 func _connect() -> void:
+	_connect_pending = false
+	if _left:
+		return
 	_attempts += 1
 	var err := Net.start_client(address, port)
 	if err != OK:
@@ -104,7 +132,9 @@ func _connect() -> void:
 		session_ended.emit("connect_error")
 		return
 	var shown := address if Net.is_ws_url(address) else "%s:%d" % [address, port]
-	if Net.is_ws_url(address) and _attempts > 3:
+	if reconnecting:
+		status_changed.emit("연결이 끊겼어요. 다시 접속하는 중... (%d/%d)" % [_attempts, _max_attempts()])
+	elif Net.is_ws_url(address) and _attempts > 3:
 		status_changed.emit("서버를 깨우는 중이에요... 무료 서버는 최대 1분 걸려요 (%d초)" % int(_attempts * CLOUD_RETRY_SEC))
 	else:
 		status_changed.emit("서버 접속 중... %s (%d/%d)" % [shown, _attempts, _max_attempts()])
@@ -132,10 +162,12 @@ func _on_connected() -> void:
 	}
 	if bot_mode == "badversion":
 		hello["protocol"] = 9999
+	if session_token != "":
+		hello["resume"] = session_token
 	if bot_mode == "silent":
 		return  # hello를 보내지 않음 → 서버 타임아웃 검증용
 	Net.c_hello.rpc_id(1, hello)
-	status_changed.emit("입장 요청 중...")
+	status_changed.emit("다시 들어가는 중..." if reconnecting else "입장 요청 중...")
 
 
 ## 테스트용 위조 토큰: 진짜처럼 보이는 클레임 + 임의 서명. 서버는 서명 검증에서 거절해야 한다.
@@ -163,20 +195,90 @@ func _forged_token() -> String:
 
 
 func _max_attempts() -> int:
+	if reconnecting:
+		return NetConfig.RECONNECT_MAX_ATTEMPTS
 	return MAX_CONNECT_ATTEMPTS_CLOUD if Net.is_ws_url(address) else MAX_CONNECT_ATTEMPTS
 
 
+func _retry_delay() -> float:
+	if reconnecting:
+		return NetConfig.RECONNECT_RETRY_SEC
+	return CLOUD_RETRY_SEC if Net.is_ws_url(address) else 0.5
+
+
 func _on_connection_failed() -> void:
+	if _left or _connect_pending:
+		return
 	if _attempts < _max_attempts() and not welcomed:
-		get_tree().create_timer(CLOUD_RETRY_SEC if Net.is_ws_url(address) else 0.5).timeout.connect(_connect)
+		_schedule_connect(_retry_delay())
+		return
+	if reconnecting:
+		reconnecting = false
+		status_changed.emit("다시 접속하지 못했어요.")
+		session_ended.emit("reconnect_failed")
 		return
 	status_changed.emit("서버에 연결할 수 없습니다.")
 	session_ended.emit("connection_failed")
 
 
 func _on_server_disconnected() -> void:
+	if _connect_pending:
+		return  # 이미 다시 접속하려고 기다리는 중 (스스로 닫은 옛 연결의 늦은 이벤트)
+	if _can_reconnect():
+		if welcomed:
+			_begin_reconnect("server_disconnected", NetConfig.RECONNECT_RETRY_SEC * 0.5)
+		elif _attempts < _max_attempts():
+			# 재접속 도중 입장 전에 다시 끊김 → 조금 뒤 다시 시도
+			Net.stop()
+			_schedule_connect(_retry_delay())
+		else:
+			_on_connection_failed()
+		return
+	if _left:
+		return
 	status_changed.emit("서버와 연결이 끊어졌습니다." + (" (%s)" % reject_reason if reject_reason != "" else ""))
 	session_ended.emit(reject_reason if reject_reason != "" else "server_disconnected")
+
+
+## 갑작스러운 끊김만 재접속 (서버가 거절·추방했거나 스스로 나간 경우는 아님)
+func _can_reconnect() -> bool:
+	return not offline and not _left and reject_reason == "" and session_token != "" and (welcomed or reconnecting)
+
+
+## 지금 연결을 버리고 같은 서버에 다시 접속한다. 화면은 다시 입장할 때 새로 만든다.
+func _begin_reconnect(why: String, delay: float) -> void:
+	print("[CLIENT %d] connection lost (%s) — reconnecting" % [my_id, why])
+	_pos_before_drop = local_player.global_position if local_player else Vector3.INF
+	reconnecting = true
+	reconnects += 1
+	_reset_world()
+	Net.stop()
+	_attempts = 0
+	status_changed.emit("연결이 끊겼어요. 다시 접속하는 중...")
+	_schedule_connect(delay)
+
+
+## 테스트용: 연결을 갑자기 끊고(나가기 알림 없이) hold_sec 뒤 재접속
+func simulate_drop(hold_sec: float) -> void:
+	if offline or not welcomed:
+		return
+	_begin_reconnect("simulated drop %.1fs" % hold_sec, hold_sec)
+
+
+## 스스로 나가기: 서버에 알려 재접속용 자리를 남기지 않게 한 뒤 연결을 닫는다
+func leave() -> void:
+	if _left:
+		return
+	_left = true
+	reconnecting = false
+	var peer := multiplayer.multiplayer_peer
+	if offline or not welcomed or peer == null or peer.get_connection_status() != MultiplayerPeer.CONNECTION_CONNECTED:
+		return
+	Net.c_leave.rpc_id(1)
+	print("[CLIENT %d] leaving" % my_id)
+	# 신뢰성 메시지가 실제로 나갈 시간을 잠깐 준다 (연결을 바로 닫으면 버려질 수 있음)
+	await get_tree().create_timer(0.15).timeout
+	Net.stop()
 
 
 # ------------------------------------------------------------------ 서버 메시지
@@ -191,6 +293,8 @@ func on_welcome(data: Variant) -> void:
 		return
 	welcomed = true
 	my_id = int(d.get("peer_id", my_id))
+	session_token = str(d.get("session", ""))
+	var resumed: bool = d.get("resumed", false) == true
 	latest_tick = int(d.get("tick", 0))
 	server_tick_est = latest_tick
 	mode_id = str(d.get("mode_id", ""))
@@ -201,10 +305,20 @@ func on_welcome(data: Variant) -> void:
 			_spawn_local(info)
 		else:
 			_spawn_remote(info)
-	status_changed.emit("%s 입장 완료" % map.display_name)
+	_last_snapshot_ms = Time.get_ticks_msec()
+	if resumed:
+		resumed_count += 1
+		if local_player and _pos_before_drop != Vector3.INF:
+			resume_offset = local_player.global_position.distance_to(_pos_before_drop)
+		status_changed.emit("다시 연결됐어요! 이어서 플레이해요")
+	elif reconnecting:
+		status_changed.emit("다시 연결됐어요 (기다리는 시간이 지나 새로 입장했어요)")
+	else:
+		status_changed.emit("%s 입장 완료" % map.display_name)
+	reconnecting = false
 	if typeof(d.get("mode_state")) == TYPE_DICTIONARY:
 		on_mode_state(d["mode_state"])
-	print("[CLIENT %d] welcomed into %s with %d players" % [my_id, map_id, remotes.size() + 1])
+	print("[CLIENT %d] %s %s with %d players" % [my_id, "resumed session in" if resumed else "welcomed into", map_id, remotes.size() + 1])
 
 
 func on_reject(reason: Variant) -> void:
@@ -248,6 +362,7 @@ func on_snapshot(packet: Variant) -> void:
 		return
 	latest_tick = t
 	snapshots_received += 1
+	_last_snapshot_ms = Time.get_ticks_msec()
 	if absf(server_tick_est - t) > 8.0:
 		server_tick_est = t
 	for e in snap["players"]:
@@ -267,6 +382,12 @@ func get_render_tick() -> float:
 func _process(delta: float) -> void:
 	if welcomed and snapshots_received > 30:
 		max_frame_ms = maxf(max_frame_ms, delta * 1000.0)
+	if welcomed and not offline and _last_snapshot_ms > 0 and Time.get_ticks_msec() - _last_snapshot_ms > NetConfig.SNAPSHOT_SILENCE_MS:
+		# 서버가 조용함 (회선이 끊겼는데 아직 연결 끊김 이벤트가 안 옴) → 기다리지 않고 재접속
+		_last_snapshot_ms = 0
+		if _can_reconnect():
+			_begin_reconnect("no snapshots for %dms" % NetConfig.SNAPSHOT_SILENCE_MS, 0.1)
+			return
 	if welcomed:
 		server_tick_est += delta * NetConfig.TICK_RATE
 		# 수신 틱보다 너무 앞서 나가지 않도록 완만하게 당김
@@ -415,6 +536,9 @@ func report() -> Dictionary:
 		"my_result": _my_result(),
 		"my_entry": mode_state.get("players", {}).get(str(my_id), {}),
 		"max_frame_ms": snappedf(max_frame_ms, 0.1),
+		"reconnects": reconnects,
+		"resumed": resumed_count,
+		"resume_offset": snappedf(resume_offset, 0.01),
 	}
 
 
@@ -465,10 +589,12 @@ func on_transfer(route: Variant, target: Variant) -> void:
 	status_changed.emit("이동 중... (%s)" % target)
 	_reset_world()
 	Net.stop()
+	session_token = ""  # 세션 토큰은 서버마다 따로
+	reconnecting = false
 	address = new_addr
 	port = new_port
 	_attempts = 0
-	get_tree().create_timer(0.2).timeout.connect(_connect)
+	_schedule_connect(0.2)
 
 
 func _reset_world() -> void:

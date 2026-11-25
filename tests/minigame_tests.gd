@@ -15,6 +15,7 @@ static func run(runner: Object) -> void:
 	await test_jump_buffer()
 	test_sweeper_speed_cap()
 	test_survival_lives()
+	test_rekey_keeps_progress()
 	test_treasure_rules()
 	await test_crumbling_island()
 	test_items_and_events()
@@ -94,6 +95,44 @@ static func test_survival_lives() -> void:
 	mode.free()
 	map.free()
 	srv.free()
+
+
+## 재접속: 새 연결 번호로 옮겨도 목숨·상태·결과가 그대로 이어진다
+static func test_rekey_keeps_progress() -> void:
+	var map := MapRegistry.instantiate("survival_arena")
+	var srv := FakeServer.new()
+	var mode := ModeRegistry.create("survival") as SurvivalMode
+	mode.setup(srv, map, {"min_players": 2})
+	mode.on_player_joined(1, "A")
+	mode.on_player_joined(2, "B")
+	mode._begin_countdown()
+	mode.server_tick(mode.phase_end_tick)
+	mode.on_fell(1)  # 목숨 1개 남음
+	mode.on_player_rekeyed(1, 77)
+	var e: Dictionary = mode.entries.get(77, {})
+	t.check(not mode.entries.has(1) and e.get("peer_id") == 77 and e.get("lives") == 1 and e.get("status") == "playing", "rekey moves entry with lives/status to the new id", str(e))
+	t.check(mode.public_state()["players"].has("77") and not mode.public_state()["players"].has("1"), "public state lists the new id only")
+	mode.on_fell(2)
+	mode.on_fell(2)
+	mode.server_tick(mode.tick + 1)
+	t.check(mode.phase == "results" and mode.last_results[0]["peer_id"] == 77, "resumed player wins under its new id")
+	mode.on_player_rekeyed(77, 78)
+	t.check(mode.last_results[0]["peer_id"] == 78, "rekey during results updates the result entry")
+	mode.free()
+	map.free()
+	srv.free()
+
+	var lmap := MapRegistry.instantiate("lobby_plaza")
+	var lsrv := FakeServer.new()
+	var lobby := ModeRegistry.create("lobby") as LobbyMode
+	lobby.setup(lsrv, lmap, {})
+	lobby.on_player_joined(5, "L")
+	lobby._hold[5] = {"mode": "racing", "ticks": 50}
+	lobby.on_player_rekeyed(5, 6)
+	t.check(lobby.entries.has(6) and not lobby.entries.has(5) and not lobby._hold.has(5) and not lobby._hold.has(6), "lobby rekey moves entry and resets portal timer")
+	lobby.free()
+	lmap.free()
+	lsrv.free()
 
 
 static func test_treasure_rules() -> void:

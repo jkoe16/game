@@ -72,6 +72,11 @@ namespace PartyWorld
                     map = GameMap.Create<CoopRooms>();
                     mode = gameObject.AddComponent<CoopSolo>();
                     break;
+                case "party":
+                    ClearMap();
+                    map = GameMap.Create<CoinArena>();
+                    mode = gameObject.AddComponent<PartyCoinsSolo>();
+                    break;
                 default:
                     return false;
             }

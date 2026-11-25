@@ -18,7 +18,7 @@ namespace PartyWorld.EditorTools
         [MenuItem("Party World/웹 빌드")]
         public static void BuildWeb()
         {
-            string outPath = GetArg("-customBuildPath") ?? Path.GetFullPath(Path.Combine(Application.dataPath, "../../build/unity-web"));
+            string outPath = GetArg("-customBuildPath") ?? Path.GetFullPath(Path.Combine(Application.dataPath, "../../unity-webbuild"));
 
             if (!File.Exists(ScenePath))
             {

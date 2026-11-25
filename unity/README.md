@@ -14,6 +14,12 @@ Godot 판(저장소 루트)을 Unity로 옮기는 중입니다. Godot 판은 Uni
 3. 열리면 아무 씬(기본 SampleScene 또는 File → New Scene)에서 ▶ 재생
    - "새 Input System을 켤까요?" 창이 뜨면 Yes (어느 쪽이든 동작함)
 
+## 웹사이트로 올리기 (자동)
+`unity/` 를 고쳐서 푸시하면 GitHub Actions(**Unity 웹 배포**)가 웹 빌드를 만들어 **https://jkoe16.github.io/game/unity/** 에 올립니다.
+처음 한 번만 GitHub 저장소 → Settings → Secrets and variables → Actions 에 비밀값 3개를 넣어야 합니다:
+`UNITY_EMAIL`, `UNITY_PASSWORD`, `UNITY_LICENSE`(Unity Hub 로그인한 PC의 `C:\ProgramData\Unity\Unity_lic.ulf` 내용 전체).
+에디터에서 직접 만들 때는 메뉴 **Party World → 웹 빌드** (결과: 저장소의 `build/unity-web`).
+
 ## 조작
 | | PC | 휴대폰 |
 |---|---|---|

@@ -56,6 +56,10 @@ jobs:
           set -e
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Unity 판(/unity/)은 Unity 웹 배포가 따로 올리므로 지우지 않고 이어 붙인다
+          if git clone -q --depth 1 -b gh-pages "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" /tmp/old-pages && [ -d /tmp/old-pages/unity ]; then
+            cp -r /tmp/old-pages/unity build/web/unity
+          fi
           cd build/web
           git init -q -b gh-pages
           git add -A

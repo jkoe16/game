@@ -8,7 +8,7 @@ namespace PartyWorld
     /// 위치·크기·각도 숫자는 Godot 판을 그대로 쓴다 (충돌 레이아웃이 서버와 같아야 하므로).
     /// 움직이지 않는 장식은 Decor 아래에 모아 두었다가 다 만든 뒤 정적 합치기(static batching)로 묶는다.
     /// </summary>
-    public abstract class GameMap : MonoBehaviour
+    public abstract partial class GameMap : MonoBehaviour
     {
         public string mapId = "";
         public string displayName = "";
@@ -123,15 +123,20 @@ namespace PartyWorld
 
         public GameObject AddBox(Vector3 pos, Vector3 size, Color color) => AddBox(pos, size, color, Vector3.zero);
 
-        public GameObject AddBox(Vector3 pos, Vector3 size, Color color, Vector3 rotDeg, bool collide = true, bool show = true)
+        public GameObject AddBox(Vector3 pos, Vector3 size, Color color, Vector3 rotDeg, bool collide = true, bool show = true, bool dynamic = false)
         {
             GameObject root = null;
-            if (collide)
+            if (collide || dynamic)
             {
                 root = MakeSolid("Box", pos, rotDeg);
-                root.AddComponent<BoxCollider>().size = size;
+                if (collide) root.AddComponent<BoxCollider>().size = size;
             }
-            if (show)
+            if (show && dynamic)
+            {
+                // 움직이거나 켜졌다 꺼지는 상자: 모습을 충돌 상자 아래에 둔다 (합치기에서 빠짐)
+                AddMesh(MeshFactory.Box(), Vector3.zero, Toon(color), Vector3.zero, size, root.transform);
+            }
+            else if (show)
             {
                 AddMesh(MeshFactory.Box(), pos, Toon(color), rotDeg, size);
                 if (autoUnderside && size.x >= 4f && size.z >= 4f && size.y <= 2f && rotDeg.magnitude < 0.1f)

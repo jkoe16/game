@@ -16,6 +16,10 @@ namespace PartyWorld
         public bool externalJump;
         public float killHeight = -25f;
         public Vector3 spawnPoint = new Vector3(0f, 1f, 0f);
+        /// <summary>맵·모드 진행 (없으면 맵 없이 이동만)</summary>
+        public GameSession session;
+        /// <summary>물리 틱 번호 (60Hz). 움직이는 장애물 위치가 이 번호로 정해진다.</summary>
+        public int tick;
 
         uint _seq;
         int _jumpHold;
@@ -35,9 +39,18 @@ namespace PartyWorld
             PlayerInput input = GatherInput();
             _seq++;
             input.seq = _seq;
+            tick++;
+            GameMap map = session != null ? session.map : null;
+            if (map != null)
+            {
+                map.UpdateWorld(tick);
+                map.PreMove(body, tick);
+            }
             body.Simulate(input, Time.fixedDeltaTime);
+            if (map != null) map.PostMove(body, tick);
+            if (session != null) session.OnTick(tick);
             if (body.transform.position.y < killHeight)
-                body.Teleport(spawnPoint);
+                body.Teleport(session != null ? session.RespawnPoint() : spawnPoint);
         }
 
         PlayerInput GatherInput()

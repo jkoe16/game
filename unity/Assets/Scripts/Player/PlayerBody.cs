@@ -43,6 +43,8 @@ namespace PartyWorld
         public float shieldTime;
         /// <summary>카운트다운 등에서 이동 금지 (모드가 설정)</summary>
         public bool frozen;
+        /// <summary>올라서 있는 이동 발판 번호 (-1 = 없음). 맵의 PostMove 가 정한다.</summary>
+        public int floorMover = -1;
 
         /// <summary>모습 루트 (캐릭터 모델). 몸체 위치와 따로 보간해서 움직인다.</summary>
         public Transform visual;
@@ -173,6 +175,12 @@ namespace PartyWorld
             _onFloor = false;
         }
 
+        /// <summary>이동 발판에 실려 함께 움직임 (Simulate 직전에 맵이 호출)</summary>
+        public void Carry(Vector3 delta)
+        {
+            if (delta.sqrMagnitude > 0f) _cc.Move(delta);
+        }
+
         public void Teleport(Vector3 pos)
         {
             _cc.enabled = false;
@@ -182,6 +190,7 @@ namespace PartyWorld
             airTime = 0f;
             stunTime = boostTime = jumpBoostTime = shieldTime = 0f;
             _onFloor = false;
+            floorMover = -1;
             _prevPos = _currPos = pos;
         }
 

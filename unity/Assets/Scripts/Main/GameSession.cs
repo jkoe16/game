@@ -57,6 +57,11 @@ namespace PartyWorld
                     map = GameMap.Create<RaceCourse>();
                     mode = gameObject.AddComponent<ObstacleRaceSolo>();
                     break;
+                case "survival":
+                    ClearMap();
+                    map = GameMap.Create<SurvivalArena>();
+                    mode = gameObject.AddComponent<SurvivalSolo>();
+                    break;
                 default:
                     return false;
             }

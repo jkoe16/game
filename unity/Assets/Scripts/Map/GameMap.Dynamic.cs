@@ -237,7 +237,7 @@ namespace PartyWorld
             return new Vector3(away.x * 9f, 7.5f, away.y * 9f);
         }
 
-        public class Blinker { public GameObject body; public Collider shape; public MeshRenderer mesh; public Vector3 size; public Color color; public float period, phase, on; public bool solid = true; }
+        public class Blinker { public GameObject body; public Collider shape; public MeshRenderer mesh; public Vector3 size; public Color color; public Material baseMat, warnMat; public float period, phase, on; public bool solid = true; }
         public readonly List<Blinker> blinkers = new List<Blinker>();
 
         /// <summary>사라졌다 나타나는 발판: 주기 중 앞쪽 onFrac 동안 단단하고, 사라지기 0.9초 전부터 깜빡인다</summary>
@@ -249,7 +249,7 @@ namespace PartyWorld
             blinkers.Add(new Blinker
             {
                 body = body, shape = body.GetComponent<Collider>(), mesh = body.GetComponentInChildren<MeshRenderer>(),
-                size = size, color = color, period = periodSec * 60f, phase = phase, on = onFrac,
+                size = size, color = color, baseMat = Toon(color), warnMat = Toon(C(1f, 0.5f, 0.45f)), period = periodSec * 60f, phase = phase, on = onFrac,
             });
         }
 
@@ -291,7 +291,7 @@ namespace PartyWorld
                 }
                 float u = PosMod(tick / s.period + s.phase, 1f);
                 bool warn = solid && (s.on - u) * s.period < 54f; // 사라지기 0.9초 전
-                s.mesh.sharedMaterial = Toon(warn && (tick / 6) % 2 == 0 ? C(1f, 0.5f, 0.45f) : s.color);
+                s.mesh.sharedMaterial = warn && (tick / 6) % 2 == 0 ? s.warnMat : s.baseMat;
             }
         }
 
@@ -307,7 +307,7 @@ namespace PartyWorld
         }
 
         /// <summary>이동 직전: 이동 발판 위에 서 있으면 발판 이동량만큼 함께 이동</summary>
-        public void PreMove(PlayerBody body, int tick)
+        public virtual void PreMove(PlayerBody body, int tick)
         {
             if (body.floorMover >= 0 && body.floorMover < movers.Count)
             {

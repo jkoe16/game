@@ -29,6 +29,9 @@ namespace PartyWorld
         /// <summary>떨어졌을 때 다시 나올 곳</summary>
         public abstract Vector3 OnFell();
 
+        /// <summary>카운트다운이 끝나고 달리기 시작하는 순간</summary>
+        protected virtual void OnRoundStart() { }
+
         public virtual void Begin(int nowTick)
         {
             tick = nowTick;
@@ -55,6 +58,7 @@ namespace PartyWorld
                         phaseEndTick = t + roundTicks;
                         body.frozen = false;
                         Hud.Banner("출발!", 1.2f);
+                        OnRoundStart();
                     }
                     break;
                 case "playing":

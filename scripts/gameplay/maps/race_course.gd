@@ -1,7 +1,8 @@
 class_name RaceCourseMap
 extends GameMap
 ## 장애물 레이스 코스 (+Z 방향으로 진행).
-##  A 구멍 점프 → B 회전 막대 2개 → C 이동 발판(빠른 길) 또는 좁은 다리(쉬운 길) → D 점프 패드로 윗층 → E 막대 + 결승
+##  A 구멍 점프 + 굴러오는 공 → B 회전 망치 2개 → C 이동 발판(빠른 길) 또는 밀어내는 벽이 있는 좁은 다리
+##  → D 사라지는 발판 + 점프 패드로 윗층 → E 막대 + 결승
 
 const GROUND := Color(0.98, 0.78, 0.55)
 const PATH := Color(0.55, 0.8, 1.0)
@@ -11,7 +12,8 @@ var finish_z := 114.0
 ## 체크포인트: z를 넘으면 도달 (윗층은 y 조건 포함)
 var checkpoints: Array[Dictionary] = [
 	{"z": -100.0, "min_y": -99.0, "point": Vector3(0, 0.5, -2)},
-	{"z": 26.5, "min_y": -1.0, "point": Vector3(0, 0.5, 29)},
+	{"z": 16.5, "min_y": -1.0, "point": Vector3(0, 0.5, 17.4)},
+	{"z": 34.5, "min_y": -1.0, "point": Vector3(0, 0.5, 34.9)},
 	{"z": 54.0, "min_y": -1.0, "point": Vector3(0, 0.5, 55)},
 	{"z": 76.0, "min_y": -1.0, "point": Vector3(0, 0.5, 80)},
 	{"z": 98.0, "min_y": 2.5, "point": Vector3(0, 4.0, 100)},
@@ -29,11 +31,14 @@ func _ready() -> void:
 	kill_height = -15.0
 	setup_environment(Color(0.4, 0.65, 0.98), Color(0.9, 0.95, 1.0), Vector3(-55, 25, 0))
 
-	# 출발 + A: 구멍 2개
+	# 출발 + A: 구멍 점프 → 긴 비탈길에서 공 3개가 굴러온다 (점프로 넘거나 옆으로 피하기)
 	add_box(Vector3(0, -0.5, 0), Vector3(14, 1, 12), GROUND)
 	add_box(Vector3(0, -0.5, 10), Vector3(10, 1, 8), PATH)
-	add_box(Vector3(0, -0.5, 20.25), Vector3(10, 1, 7.5), PATH)
-	add_box(Vector3(0, -0.5, 30.25), Vector3(10, 1, 7.5), GROUND)
+	add_box(Vector3(0, -0.5, 25.25), Vector3(10, 1, 17.5), GROUND)
+	for i in 3:
+		var x := -3.0 + i * 3.0
+		add_roller(Vector3(x, 0.7, 33.5), Vector3(x, 0.7, 19.2), 0.7, 2.8, i * 0.37)
+	add_label(Vector3(0, 3.2, 17.5), "공을 점프로 넘어요!", 48, Color(1, 0.7, 0.8))
 	add_label(Vector3(0, 5.6, 5), "출발!", 96, Color(1, 0.9, 0.4))
 
 	# B: 넓은 무대 + 낮은 회전 막대 2개 (점프로 넘기)
@@ -49,11 +54,21 @@ func _ready() -> void:
 		var z := 60.0 + i * 6.0
 		add_mover(Vector3(-5, -0.3, z), Vector3(2, -0.3, z), Vector3(4, 0.6, 4), 4.0, i * 0.33)
 	add_box(Vector3(6.5, -0.5, 66), Vector3(1.6, 1, 20), Color(0.85, 0.7, 0.5))
+	# 쉬운 길도 공짜는 아니다: 오른쪽 벽에서 주먹이 튀어나와 다리 밖으로 밀어낸다 (떨리면 곧 나온다)
+	add_box(Vector3(8.4, 0.6, 66), Vector3(0.8, 2.2, 20), Color(0.85, 0.7, 0.5).darkened(0.2))
+	add_pusher(Vector3(8.6, 0.6, 62.0), Vector3(1.2, 1.2, 2.2), Vector3(-1, 0, 0), 2.2, 2.6, 0.0)
+	add_pusher(Vector3(8.6, 0.6, 70.0), Vector3(1.2, 1.2, 2.2), Vector3(-1, 0, 0), 2.2, 2.6, 0.5)
 	add_label(Vector3(6.5, 2.5, 58), "쉬운 길", 56)
 	add_label(Vector3(-1.5, 2.5, 57), "빠른 길", 56)
 
-	# D: 착지 무대 + 점프 패드 → 윗층
-	add_box(Vector3(0, -0.5, 86), Vector3(14, 1, 20), GROUND)
+	# D: 착지 무대 → 깜빡이다 사라지는 발판 3줄 → 점프 패드로 윗층
+	add_box(Vector3(0, -0.5, 79), Vector3(14, 1, 6), GROUND)
+	for row in 3:
+		for col in 3:
+			var ph := fposmod(-row * 0.22 + col * 0.4, 1.0)  # 앞줄일수록 늦게 사라짐 → 타이밍 맞춰 달리면 건널 수 있다
+			add_blinker(Vector3(-4.6 + col * 4.6, -0.5, 83.6 + row * 3.25), Vector3(4.4, 1, 3.05), 3.4, ph, 0.64)
+	add_label(Vector3(0, 3.0, 82.5), "빨갛게 깜빡이면 사라져요!", 48, Color(0.7, 0.9, 1))
+	add_box(Vector3(0, -0.5, 93.75), Vector3(14, 1, 4.5), GROUND)
 	add_pad("jump", Vector3(0, 0, 93.5), Vector3(2.0, 0.3, 1.2), 15.0)
 	add_pad("boost", Vector3(4.5, 0, 81.0), Vector3(1.6, 0.3, 1.4))
 	add_box(Vector3(0, 1.75, 105), Vector3(14, 3.5, 14), UPPER.darkened(0.25))
@@ -67,7 +82,8 @@ func _ready() -> void:
 
 	for i in 8:
 		spawn_points.append(Vector3(-5.25 + i * 1.5, 0.5, -3.0))
-	item_spawns = [Vector3(-3, 1.2, 10), Vector3(3, 1.2, 36), Vector3(-4, 1.2, 80), Vector3(4, 4.7, 111)]
+	item_spawns = [Vector3(-3, 1.2, 10), Vector3(3, 1.2, 10), Vector3(3, 1.2, 36), Vector3(-3, 1.2, 36),
+		Vector3(0, 1.2, 55), Vector3(-4, 1.2, 80), Vector3(2, 1.2, 80), Vector3(4, 4.7, 111)]
 	_decorate()
 
 
@@ -78,8 +94,9 @@ func _decorate() -> void:
 	add_arch(Vector3(0, 0, 5), 11.0, 4.4, Color(1.0, 0.55, 0.7))
 	add_arch(Vector3(0, 3.5, finish_z), 14.6, 4.6, Color(1.0, 0.78, 0.3))
 	var trim := Color(1, 1, 1)
-	for b in [[Vector3(0, -0.5, 0), Vector3(14, 1, 12)], [Vector3(0, -0.5, 44), Vector3(14, 1, 20)], [Vector3(0, -0.5, 86), Vector3(14, 1, 20)],
-			[Vector3(0, 3.25, 105), Vector3(14, 0.5, 14)], [Vector3(0, 3.0, 117), Vector3(14, 1, 10)], [Vector3(0, -0.5, 30.25), Vector3(10, 1, 7.5)]]:
+	for b in [[Vector3(0, -0.5, 0), Vector3(14, 1, 12)], [Vector3(0, -0.5, 44), Vector3(14, 1, 20)], [Vector3(0, -0.5, 79), Vector3(14, 1, 6)],
+			[Vector3(0, -0.5, 93.75), Vector3(14, 1, 4.5)], [Vector3(0, 3.25, 105), Vector3(14, 0.5, 14)], [Vector3(0, 3.0, 117), Vector3(14, 1, 10)],
+			[Vector3(0, -0.5, 25.25), Vector3(10, 1, 17.5)]]:
 		add_edge_trim(b[0], b[1], trim)
 	var flag_cols := [Color(1.0, 0.5, 0.6), Color(1.0, 0.8, 0.3), Color(0.45, 0.75, 1.0), Color(0.6, 0.9, 0.5)]
 	var fi := 0
@@ -193,6 +210,8 @@ func is_finished(pos: Vector3) -> bool:
 
 
 func get_bot_target(pos: Vector3, _state: Dictionary, _my_id: int) -> Vector3:
+	if pos.z > 52.5 and pos.z < 56.2 and pos.x < 5.8 and pos.y > -0.5:
+		return Vector3(6.5, 0, 55.0)  # 쉬운 길 다리 입구까지는 발판 위로 옆걸음
 	for w in waypoints:
 		if w.z > pos.z + 1.0:
 			if w.y - pos.y > 2.0:

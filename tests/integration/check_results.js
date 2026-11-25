@@ -190,6 +190,12 @@ if (scenario === "rooms") {
   check(/idle 4s → stop/.test(gw), "empty servers are stopped automatically");
   const bad = result("bad", "CLIENT_RESULT");
   check(bad && !bad.welcomed, "invalid room code is refused");
+  const pz = result("plaza2", "CLIENT_RESULT");
+  check(pz && pz.welcomed && pz.transfers.includes("obstacle_race") && pz.transfers.includes("round_over"), "public plaza 2 portal → race → back", pz && JSON.stringify(pz.transfers));
+  check(/\[public2\/obstacle_race\].*joined as 'Plaza2'/.test(gw), "plaza 2 plays in its own race server (not plaza 1's)");
+  check((gw.match(/\[public2\/lobby\].*joined as 'Plaza2'/g) || []).length >= 2, "plaza 2 player returned to plaza 2");
+  const bp = result("badplaza", "CLIENT_RESULT");
+  check(bp && !bp.welcomed, "out-of-range plaza number is refused");
   const errs = gw.split(/\r?\n/).filter(l => /SCRIPT ERROR|Parse Error/.test(l));
   check(errs.length === 0, "no script errors in gateway-managed servers", errs.slice(0, 3).join(" | "));
 }

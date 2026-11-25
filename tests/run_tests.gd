@@ -28,6 +28,7 @@ func _run() -> void:
 	test_nickname()
 	test_appearance()
 	test_args()
+	test_matchmaking()
 	print("== physics tests ==")
 	await test_movement()
 	await test_prediction_determinism()
@@ -108,6 +109,21 @@ func test_appearance() -> void:
 	check(Appearance.sanitize({"color": 999, "hat": -1}) == Appearance.default_appearance(), "out of range reset")
 	check(Appearance.sanitize({"color": "3"}) == Appearance.default_appearance(), "wrong type reset")
 	check(Appearance.sanitize(null) == Appearance.default_appearance(), "null reset")
+
+
+func test_matchmaking() -> void:
+	check(Matchmaking.http_base("wss://game.example.com/r/K7QP/racing") == "https://game.example.com", "matchmaking: wss → https base")
+	check(Matchmaking.http_base("ws://127.0.0.1:8080/") == "http://127.0.0.1:8080", "matchmaking: ws → http base keeps port")
+	check(Matchmaking.http_base("192.168.0.5:7777") == "", "matchmaking: no API for direct (ENet) address")
+	var srv := "wss://game.example.com"
+	check(Matchmaking.quick_match_target(srv, {"ok": true, "path": "/p/2"}) == srv + "/p/2", "quick match → plaza 2 url")
+	check(Matchmaking.quick_match_target(srv, {"ok": true, "path": "/"}) == srv, "quick match → main plaza url")
+	check(Matchmaking.quick_match_target(srv, {"ok": false}) == srv, "quick match: no answer → main plaza")
+	check(Matchmaking.quick_match_target(srv, {"ok": true, "path": "/r/HACK"}) == srv, "quick match: ignores non-plaza paths")
+	check(Matchmaking.join_problem({"ok": true, "exists": false}, "K7QP").contains("찾을 수 없어요"), "join: missing room explained")
+	check(Matchmaking.join_problem({"ok": true, "exists": true, "full": true, "max_players": 24}, "K7QP").contains("꽉 찼어요"), "join: full room explained")
+	check(Matchmaking.join_problem({"ok": true, "exists": true, "full": false}, "K7QP") == "", "join: open room allowed")
+	check(Matchmaking.join_problem({"ok": false}, "K7QP") == "", "join: server asleep → try connecting anyway")
 
 
 func test_args() -> void:

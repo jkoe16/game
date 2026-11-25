@@ -107,6 +107,8 @@ case "$SCENARIO" in
     run public1 16 --connect="$GW/" --nickname=Public1 --bot=walker
     run traveler 36 --connect="$GW/r/TRIP" --nickname=Traveler --bot=objective --bot-portal=obstacle_race
     run bad 6 --connect="$GW/r/x!" --nickname=BadCode --bot=walker
+    run plaza2 36 --connect="$GW/p/2" --nickname=Plaza2 --bot=objective --bot-portal=obstacle_race
+    run badplaza 6 --connect="$GW/p/99" --nickname=BadPlaza --bot=walker
     ;;
   capacity)
     run server 17 --server --auth=dev --port="$PORT" --max-players=8 --report-at=11.5

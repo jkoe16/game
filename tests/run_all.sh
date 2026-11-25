@@ -15,6 +15,10 @@ ERRS=$(grep -c "SCRIPT ERROR" "$OUT/unit.log")
 echo "unit: $UNIT  script_errors=$ERRS"
 if ! echo "$UNIT" | grep -q "failed=0" || [ "$ERRS" != "0" ]; then FAILED+=(unit); grep -E "FAIL|SCRIPT ERROR" "$OUT/unit.log" | head -20; fi
 
+GW_API=$(node "$ROOT/tests/integration/gateway_api_test.js" 2>&1)
+echo "$GW_API" | grep GATEWAY_API_RESULT
+if ! echo "$GW_API" | grep -q "GATEWAY_API_RESULT.*failed=0"; then FAILED+=(gateway_api); echo "$GW_API" | grep FAIL; fi
+
 for sc in basic capacity auth authflow data touch minigames portal; do
   RES=$(bash "$ROOT/tests/integration/net_test.sh" "$sc" "$OUT/$sc" 2>&1)
   LINE=$(echo "$RES" | grep NET_RESULT)

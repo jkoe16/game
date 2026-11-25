@@ -67,6 +67,11 @@ namespace PartyWorld
                     map = GameMap.Create<RaceTrack>();
                     mode = gameObject.AddComponent<RacingSolo>();
                     break;
+                case "coop":
+                    ClearMap();
+                    map = GameMap.Create<CoopRooms>();
+                    mode = gameObject.AddComponent<CoopSolo>();
+                    break;
                 default:
                     return false;
             }

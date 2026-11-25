@@ -14,6 +14,8 @@
 #            = gateway  : 클라우드 게이트웨이(server/cloud/gateway.js)가 서버 6개 실행, 봇이 ws://게이트웨이/ 로 접속 → 포털 → 레이스 → 로비
 #            = rooms    : 게이트웨이 방 코드 (방끼리 격리, 방 전용 미니게임 이동, 빈 서버 자동 종료)
 #            = offline  : 서버 없이 로컬 규칙 실행 (오프라인/웹 연습): 포털 → 레이스 완주 → 로비 복귀
+#            = reconnect: 끊긴 플레이어 재접속 — 회선 끊김(cut)/조용한 끊김(blackhole)/갑작스러운 종료 후 복귀,
+#                         돌아오지 않으면 자리 만료, 스스로 나가기는 즉시 퇴장, 미니게임 도중 끊겼다 돌아와도 순위 유지
 #
 # 결과 판정은 tests/integration/check_results.js 가 수행한다 (Node.js 필요).
 set -u
@@ -28,6 +30,8 @@ mkdir -p "$OUT"
 rm -f "$OUT"/*.log
 PIDS=()
 MOCK_PID=""
+# 리눅스/맥에는 cygpath가 없음 → 경로 그대로
+command -v cygpath > /dev/null 2>&1 || cygpath() { echo "$2"; }
 
 # 새 스크립트 클래스가 추가돼도 실패하지 않도록 매번 임포트(클래스 캐시 갱신)
 "$GODOT" --headless --path "$ROOT" --import > "$OUT/import.log" 2>&1
@@ -122,7 +126,8 @@ case "$SCENARIO" in
     start_mock
     run server 16 --server --auth=firebase "$FB_CFG" --port="$PORT" --max-players=8 --report-at=10.5
     sleep 2
-    run guest 11 "$FB_CFG" --login=anonymous --connect=127.0.0.1:"$PORT" --nickname=Guest --bot=walker
+    # Guest는 도중에 연결이 끊겼다가 돌아옴 (Firebase 모드 재접속: 세션 토큰 + 같은 계정 확인)
+    run guest 11 "$FB_CFG" --login=anonymous --connect=127.0.0.1:"$PORT" --nickname=Guest --bot=walker --drop-at=5 --drop-for=1
     run email1 11 "$FB_CFG" --login=email:kid@example.com:secret123 --connect=127.0.0.1:"$PORT" --nickname=Email1 --bot=walker
     run forged 8 "$FB_CFG" --login=anonymous --connect=127.0.0.1:"$PORT" --nickname=Forger --bot=forged
     run notoken 8 "$FB_CFG" --connect=127.0.0.1:"$PORT" --nickname=NoToken --bot=walker
@@ -161,6 +166,25 @@ case "$SCENARIO" in
     sleep 2
     run traveler 33 --connect=127.0.0.1:"$PORT" --nickname=Traveler --bot=objective --bot-portal=obstacle_race
     ;;
+  reconnect)
+    # 로비(WebSocket, 유예 6초) + 장애물 레이스(ENet). 프록시 2개가 7초에 연결을 끊는다.
+    WS="ws://127.0.0.1:$PORT"
+    node "$ROOT/tests/integration/drop_proxy.js" $((PORT + 1)) "$PORT" cut 7 > "$OUT/proxy_cut.txt" 2>&1 &
+    GW_PID=$!
+    node "$ROOT/tests/integration/drop_proxy.js" $((PORT + 2)) "$PORT" blackhole 7 > "$OUT/proxy_hole.txt" 2>&1 &
+    HOLE_PID=$!
+    run server 30 --server --transport=ws --auth=dev --port="$PORT" --max-players=8 --reconnect-grace=6 --report-at=26
+    run srv_race 30 --server --auth=dev --mode=obstacle_race --port=17790 --reconnect-grace=6 --min-players=1 --wait-sec=1 --countdown-sec=1 --round-sec=16 --results-sec=4 --report-at=26
+    sleep 2
+    run stay 27 --connect="$WS" --nickname=Stay --bot=walker
+    run cutter 27 --connect="ws://127.0.0.1:$((PORT + 1))" --nickname=Cutter --bot=walker
+    run hole 27 --connect="ws://127.0.0.1:$((PORT + 2))" --nickname=Hole --bot=walker
+    run dropper 27 --connect="$WS" --nickname=Dropper --bot=walker --drop-at=6 --drop-for=2
+    run ghost 27 --connect="$WS" --nickname=Ghost --bot=walker --drop-at=6 --drop-for=60
+    run quietghost 7.5 --connect="ws://127.0.0.1:$((PORT + 2))" --nickname=QuietGhost --bot=walker
+    run leaver 9 --connect="$WS" --nickname=Leaver --bot=walker --leave-at=6
+    run racer 27 --connect=127.0.0.1:17790 --nickname=Racer --bot=objective --drop-at=9 --drop-for=1.5
+    ;;
   offline)
     run offline_race 70 --offline=obstacle_race --bot=objective
     run offline_portal 25 --offline --bot=objective --bot-portal=obstacle_race
@@ -176,6 +200,7 @@ esac
 
 wait "${PIDS[@]}"
 [ -n "${GW_PID:-}" ] && kill "$GW_PID" 2>/dev/null && sleep 1
+[ -n "${HOLE_PID:-}" ] && kill "$HOLE_PID" 2>/dev/null
 [ -n "$MOCK_PID" ] && curl -s "http://127.0.0.1:$MOCK_PORT/stats" > "$OUT/mock_stats.json" 2>/dev/null; [ -n "$MOCK_PID" ] && kill "$MOCK_PID" 2>/dev/null
 echo "logs in $OUT"
 node "$ROOT/tests/integration/check_results.js" "$SCENARIO" "$OUT"

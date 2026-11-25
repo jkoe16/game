@@ -19,7 +19,7 @@ GW_API=$(node "$ROOT/tests/integration/gateway_api_test.js" 2>&1)
 echo "$GW_API" | grep GATEWAY_API_RESULT
 if ! echo "$GW_API" | grep -q "GATEWAY_API_RESULT.*failed=0"; then FAILED+=(gateway_api); echo "$GW_API" | grep FAIL; fi
 
-for sc in basic capacity auth authflow data touch minigames portal; do
+for sc in basic capacity auth authflow data touch minigames portal reconnect; do
   RES=$(bash "$ROOT/tests/integration/net_test.sh" "$sc" "$OUT/$sc" 2>&1)
   LINE=$(echo "$RES" | grep NET_RESULT)
   echo "$LINE"

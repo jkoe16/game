@@ -37,7 +37,7 @@ export GODOT="/c/Users/User/Desktop/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-s
 | 1 | 기획·설계 (GDD, 기술/네트워크/DB 설계, 폴더 구조) | ✅ 완료 |
 | 2 | 캐릭터·이동·점프·계단·애니메이션·3인칭 카메라 | 🟡 프로토타입 완료 (Blender 모델 교체 필요) |
 | 3 | PC·모바일 입력 (가상 조이스틱, 터치 카메라, 반응형 UI) | 🟡 PC 완료 / 터치 조작 구현·테스트 ✅ / 모바일 빌드·실기기 ⬜ |
-| 4 | 전용 서버 (접속·검증·서버 권한 이동·예측/보정·보간) | 🟡 핵심 완료 / 방 코드 ✅ · 빠른 매칭(공개 광장 자동 분산) ✅ / 재접속 ⬜ |
+| 4 | 전용 서버 (접속·검증·서버 권한 이동·예측/보정·보간) | 🟡 핵심 완료 / 방 코드 ✅ · 빠른 매칭(공개 광장 자동 분산) ✅ / 끊긴 플레이어 재접속(30초 자리 유지) ✅ |
 | 5 | 3D 로비 (광장, 친구 초대, 방 시스템) | 🟡 그레이박스 광장 |
 | 6 | 미니게임 5종 (장애물 레이스·생존·레이싱·협동·파티 코인) | 🟡 5종 규칙·맵·한 판 흐름(대기→카운트다운→경기→결과→로비) 구현, 오프라인 혼자 연습 ✅ / 아트·밸런스 ⬜ |
 | 7 | 계정·성장 (Firebase Auth ✅ / Firestore 프로필·플레이 기록 ✅, 경험치·아이템 ⬜) | 🟡 |
@@ -60,4 +60,5 @@ bash tests/integration/net_test.sh minigames                 # 미니게임 5종
 bash tests/integration/net_test.sh portal                    # 로비 포털 → 레이스 서버 → 로비 복귀
 bash tests/integration/net_test.sh offline                   # 서버 없이 혼자 연습 (웹과 같은 경로)
 bash tests/integration/net_test.sh touch                     # 모바일 터치 조작
+bash tests/integration/net_test.sh reconnect                 # 끊긴 플레이어 재접속 (끊김·조용한 끊김·만료·나가기·경기 도중)
 ```

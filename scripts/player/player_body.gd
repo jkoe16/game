@@ -9,6 +9,8 @@ const WALK_SPEED := 6.5
 const ACCEL_GROUND := 60.0
 ## 멈출 때·반대로 돌 때 감속 (높을수록 얼음 위처럼 미끄러지지 않고 딱 선다)
 const DECEL_GROUND := 120.0
+## 키를 뗐을 때 감속 (260이면 걷던 속도에서 약 0.08m, 0.025초 만에 선다)
+const DECEL_STOP := 260.0
 const ACCEL_AIR := 18.0
 const STUN_FRICTION := 4.0
 const GRAVITY := 26.0
@@ -82,7 +84,7 @@ func simulate(input: PlayerInput, delta: float, world_tick := 0) -> void:
 		along = move_toward(along, move.length() * top_speed, (ACCEL_GROUND if along >= 0.0 else DECEL_GROUND) * delta)
 		horiz = dir * along + side
 	else:
-		horiz = horiz.move_toward(move * top_speed, (DECEL_GROUND if on_floor else ACCEL_AIR) * delta)
+		horiz = horiz.move_toward(move * top_speed, (DECEL_STOP if on_floor else ACCEL_AIR) * delta)
 
 	var vy := velocity.y
 	if on_floor:

@@ -70,7 +70,10 @@ func simulate(input: PlayerInput, delta: float, world_tick := 0) -> void:
 	var horiz := Vector2(velocity.x, velocity.z)
 	var moving := move.length_squared() > 0.0001
 	var top_speed := WALK_SPEED * (BOOST_MULT if boost_time > 0.0 else 1.0)
-	if horiz.length() > top_speed and stun_time <= 0.0 and on_floor:
+	# 최고 속도를 넘은 경우(부스트 끝 등)에만 최고 속도까지 감속. 0.05 여유를 두지 않으면 6.5000001 같은
+	# 부동소수 오차로 이 분기에 걸려 속도가 6.5에 묶인 채 키를 떼도 영원히 미끄러졌다(대각선 방향에서 자주).
+	# 키를 뗐으면 이 분기 대신 아래 정지 감속을 쓴다.
+	if horiz.length() > top_speed + 0.05 and stun_time <= 0.0 and on_floor and moving:
 		horiz = horiz.limit_length(maxf(top_speed, horiz.length() - DECEL_GROUND * delta))
 	elif stun_time > 0.0:
 		horiz = horiz.move_toward(move * top_speed, STUN_FRICTION * delta)

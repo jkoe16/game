@@ -58,7 +58,7 @@ namespace PartyWorld
             var es = new GameObject("EventSystem");
             Object.DontDestroyOnLoad(es);
             es.AddComponent<EventSystem>();
-            es.AddComponent<StandaloneInputModule>();
+            es.AddComponent<FocusFreeInputModule>();
         }
 
         static Sprite _round;
@@ -184,6 +184,26 @@ namespace PartyWorld
             f.text = value;
             f.targetGraphic = img;
             return f;
+        }
+    }
+
+    /// <summary>
+    /// 기본 StandaloneInputModule 은 Unity 가 "창이 포커스를 잃었다"고 여기면 UI 클릭을 통째로 무시한다.
+    /// 웹(숨은 탭·iframe 에서 돌아온 직후 등)에서는 그 상태가 남아 버튼이 안 눌릴 수 있어,
+    /// 포커스가 없을 때도 마우스 클릭만은 처리한다. (포커스가 있으면 원래 동작 그대로)
+    /// </summary>
+    public class FocusFreeInputModule : StandaloneInputModule
+    {
+        public override void Process()
+        {
+            if (eventSystem.isFocused)
+            {
+                base.Process();
+                return;
+            }
+            SendUpdateEventToSelectedObject();
+            if (input.mousePresent)
+                ProcessMouseEvent();
         }
     }
 }

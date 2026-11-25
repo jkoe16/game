@@ -46,12 +46,8 @@ namespace PartyWorld
             ctrl.cam = cam;
             ctrl.spawnPoint = PracticeMap.Spawn;
 
+            // 휴대폰·태블릿(웹 포함)에서만 터치 버튼 표시. PC 브라우저는 터치 장치가 잡혀도 키보드·마우스로.
             bool touch = Application.isMobilePlatform;
-#if ENABLE_INPUT_SYSTEM
-            touch |= UnityEngine.InputSystem.Touchscreen.current != null;
-#else
-            touch |= Input.touchSupported;
-#endif
             if (touch)
             {
                 cam.touchMode = Application.isMobilePlatform; // 터치 화면 노트북은 마우스도 그대로

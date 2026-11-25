@@ -27,6 +27,9 @@ namespace PartyWorld.EditorTools
                 EditorSceneManager.SaveScene(scene, ScenePath);
             }
 
+            // 도형·재질을 실행 중에 코드로 만들기 때문에 빌드가 셰이더를 "안 쓰는 것"으로 보고 빼 버린다 → 화면이 분홍색.
+            EnsureAlwaysIncluded("Standard");
+
             PlayerSettings.companyName = "jkoe16";
             PlayerSettings.productName = "3D PARTY WORLD";
             PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Gzip;
@@ -45,6 +48,22 @@ namespace PartyWorld.EditorTools
             Debug.Log($"[BuildScript] 결과: {report.summary.result}, 크기 {report.summary.totalSize / 1048576f:0.0} MB → {outPath}");
             if (Application.isBatchMode)
                 EditorApplication.Exit(report.summary.result == UnityEditor.Build.Reporting.BuildResult.Succeeded ? 0 : 1);
+        }
+
+        static void EnsureAlwaysIncluded(string shaderName)
+        {
+            var shader = Shader.Find(shaderName);
+            if (shader == null) return;
+            var gs = AssetDatabase.LoadAssetAtPath<UnityEngine.Rendering.GraphicsSettings>("ProjectSettings/GraphicsSettings.asset");
+            if (gs == null) return;
+            var so = new SerializedObject(gs);
+            var list = so.FindProperty("m_AlwaysIncludedShaders");
+            for (int i = 0; i < list.arraySize; i++)
+                if (list.GetArrayElementAtIndex(i).objectReferenceValue == shader) return;
+            list.InsertArrayElementAtIndex(list.arraySize);
+            list.GetArrayElementAtIndex(list.arraySize - 1).objectReferenceValue = shader;
+            so.ApplyModifiedProperties();
+            AssetDatabase.SaveAssets();
         }
 
         static string GetArg(string name)

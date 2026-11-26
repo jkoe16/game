@@ -13,7 +13,9 @@ namespace PartyWorld
 
         public System.Action onExit, onMenu;
 
-        Text _top, _sub, _big, _rules, _banner, _help;
+        Text _top, _sub, _big, _rules, _banner, _help, _status, _board;
+        Image _boardBg;
+        Text _exitText;
         Image _topBg;
         GameObject _results;
         Text _resultTitle, _resultBody, _resultFoot;
@@ -66,6 +68,13 @@ namespace PartyWorld
             _hold.SetActive(false);
 
             _exit = UiKit.Btn(root, "광장으로", Color.white, UiKit.Ink, new Vector2(1f, 1f), new Vector2(-14, -14), new Vector2(150, 52), () => onExit?.Invoke(), 21);
+            _exitText = _exit.GetComponentInChildren<Text>();
+
+            // 온라인: 함께 있는 사람·접속 상태 (위 가운데 아래), 점수판 (오른쪽)
+            _status = UiKit.Label(root, "", 18, Color.white, TextAnchor.UpperLeft, new Vector2(0f, 1f), new Vector2(130, -24), new Vector2(760, 60), true);
+            _boardBg = UiKit.Panel(root, new Vector2(1f, 1f), new Vector2(-14, -80), new Vector2(300, 40), UiKit.HudBg, 0.5f);
+            _board = UiKit.Label(_boardBg.transform, "", 20, Color.white, TextAnchor.UpperLeft, new Vector2(0.5f, 1f), new Vector2(0, -10), new Vector2(270, 300));
+            _boardBg.gameObject.SetActive(false);
             _menu = UiKit.Btn(root, "메뉴", Color.white, UiKit.Ink, new Vector2(0f, 1f), new Vector2(14, -14), new Vector2(100, 52), () => onMenu?.Invoke(), 21);
 
             bool touch = Application.isMobilePlatform;
@@ -125,7 +134,30 @@ namespace PartyWorld
             _holdText.text = $"{name} 입장 중…";
         }
 
-        public void ShowExit(bool show) => _exit.gameObject.SetActive(show);
+        public void ShowExit(bool show) => ShowExit(show, "광장으로");
+
+        public void ShowExit(bool show, string label)
+        {
+            if (_exit.gameObject.activeSelf != show) _exit.gameObject.SetActive(show);
+            if (_exitText != null && _exitText.text != label) _exitText.text = label;
+        }
+
+        /// <summary>왼쪽 위 작은 글자 (온라인 접속 상태, 함께 있는 사람)</summary>
+        public void SetStatus(string text)
+        {
+            if (_status.text != text) _status.text = text;
+        }
+
+        /// <summary>오른쪽 점수판 (빈 문자열이면 숨김)</summary>
+        public void SetBoard(string text)
+        {
+            bool show = !string.IsNullOrEmpty(text);
+            if (_boardBg.gameObject.activeSelf != show) _boardBg.gameObject.SetActive(show);
+            if (!show || _board.text == text) return;
+            _board.text = text;
+            int lines = text.Split('\n').Length;
+            _boardBg.rectTransform.sizeDelta = new Vector2(300, 20 + lines * 26);
+        }
 
         public void SetVisible(bool show) => gameObject.GetComponent<Canvas>().enabled = show;
 

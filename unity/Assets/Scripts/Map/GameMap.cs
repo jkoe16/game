@@ -254,8 +254,14 @@ namespace PartyWorld
         /// <summary>항상 카메라를 보는 글자 (Godot Label3D, pixel_size 0.01 → 글자 크기 size/100 m)</summary>
         public void AddLabel(Vector3 pos, string text, int size = 96, Color? color = null)
         {
+            MakeLabel(dynamicRoot, pos, text, size, color);
+        }
+
+        /// <summary>카메라를 바라보는 테두리 글자 (맵 표지판, 다른 사람 이름표)</summary>
+        public static Transform MakeLabel(Transform parent, Vector3 pos, string text, int size = 96, Color? color = null)
+        {
             var root = new GameObject("Label: " + text).transform;
-            root.SetParent(dynamicRoot, false);
+            root.SetParent(parent, false);
             root.localPosition = pos;
             root.gameObject.AddComponent<Billboard>();
             Color outline = C(0.15f, 0.12f, 0.25f);
@@ -265,6 +271,7 @@ namespace PartyWorld
             foreach (var off in offs)
                 MakeText(root, text, size, outline, new Vector3(off.x, off.y, 0.01f), 0);
             MakeText(root, text, size, color ?? Color.white, Vector3.zero, 1); // 테두리 위에 본 글자
+            return root;
         }
 
         static void MakeText(Transform parent, string text, int size, Color color, Vector3 local, int order)

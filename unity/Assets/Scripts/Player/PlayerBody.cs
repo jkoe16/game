@@ -194,6 +194,35 @@ namespace PartyWorld
             _prevPos = _currPos = pos;
         }
 
+        /// <summary>
+        /// 서버가 알려 준 상태로 되돌린다 (온라인 보정). 위치·속도·타이머를 그대로 받고, 보간은 끊지 않는다.
+        /// </summary>
+        public void SetNetState(Vector3 pos, Vector3 vel, float air, float stun, float boost, float jumpBoost, float shield, int mover, bool grounded)
+        {
+            _cc.enabled = false;
+            transform.position = pos;
+            _cc.enabled = true;
+            velocity = vel;
+            airTime = air;
+            stunTime = stun;
+            boostTime = boost;
+            jumpBoostTime = jumpBoost;
+            shieldTime = shield;
+            floorMover = mover;
+            _onFloor = grounded;
+            _currPos = pos;
+        }
+
+        /// <summary>보정 직후 모습만 이전 자리에서 따라오게 하는 오프셋 (빠르게 0으로 줄어든다)</summary>
+        public Vector3 visualOffset;
+
+        /// <summary>순간이동처럼 크게 바뀌었을 때: 틱 보간도 끊는다</summary>
+        public void SnapInterpolation()
+        {
+            _prevPos = _currPos = transform.position;
+            visualOffset = Vector3.zero;
+        }
+
         /// <summary>틱 사이를 보간한 위치 (카메라·모습이 사용). 물리 틱보다 화면 프레임이 잦아도 부드럽다.</summary>
         public Vector3 InterpolatedPosition
         {
@@ -209,7 +238,12 @@ namespace PartyWorld
         void LateUpdate()
         {
             if (visual == null) return;
-            visual.position = InterpolatedPosition;
+            if (visualOffset != Vector3.zero)
+            {
+                visualOffset = Vector3.Lerp(visualOffset, Vector3.zero, 1f - Mathf.Exp(-28f * Time.deltaTime));
+                if (visualOffset.sqrMagnitude < 0.005f * 0.005f) visualOffset = Vector3.zero;
+            }
+            visual.position = InterpolatedPosition + visualOffset;
             float target = facingYaw * Mathf.Rad2Deg;
             float cur = visual.eulerAngles.y;
             visual.rotation = Quaternion.Euler(0f, Mathf.LerpAngle(cur, target, 1f - Mathf.Exp(-TurnSpeed * Time.deltaTime)), 0f);

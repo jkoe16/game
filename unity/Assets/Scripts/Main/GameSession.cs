@@ -88,11 +88,30 @@ namespace PartyWorld
             return true;
         }
 
+        /// <summary>온라인: 서버가 알려 준 맵을 연다 (규칙·점수는 서버가 맡으므로 SoloMode 없이)</summary>
+        public bool LoadOnlineMap(string mapId)
+        {
+            ClearMap();
+            switch (mapId)
+            {
+                case "lobby_plaza": map = GameMap.Create<LobbyPlaza>(); break;
+                case "race_course": map = GameMap.Create<RaceCourse>(); break;
+                case "survival_arena": map = GameMap.Create<SurvivalArena>(); break;
+                case "race_track": map = GameMap.Create<RaceTrack>(); break;
+                case "coop_rooms": map = GameMap.Create<CoopRooms>(); break;
+                case "coin_arena": map = GameMap.Create<CoinArena>(); break;
+                default: return false;
+            }
+            ctrl.killHeight = map.killHeight;
+            return true;
+        }
+
         public Vector3 RespawnPoint() => mode != null ? mode.OnFell() : _spawn;
 
         /// <summary>매 물리 틱, 이동이 끝난 뒤</summary>
         public void OnTick(int tick)
         {
+            if (ctrl.online != null) return; // 온라인: 포털·규칙은 서버가
             if (mode != null)
             {
                 mode.Tick(tick, body);
@@ -126,7 +145,7 @@ namespace PartyWorld
         void Update()
         {
             var hud = GameHud.I;
-            if (hud == null) return;
+            if (hud == null || ctrl.online != null) return; // 온라인 화면은 OnlineClient 가 그린다
             // 포털 입장 대기 막대
             if (_holdMode != "" && _holdTicks < HoldTicks && mode == null)
             {

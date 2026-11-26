@@ -34,6 +34,8 @@ namespace PartyWorld
         public PlayerBody sourceBody;
         /// <summary>내 캐릭터면 1~4 키로 감정 표현 (손 흔들기·춤·만세·시무룩)</summary>
         public bool readEmoteKeys;
+        /// <summary>내 캐릭터가 감정 표현을 했을 때 (온라인이면 서버에 알린다)</summary>
+        public static System.Action<int> onLocalEmote;
 
         readonly Transform[] _parts = new Transform[PartCount];
         readonly List<Transform> _eyes = new List<Transform>();
@@ -303,7 +305,11 @@ namespace PartyWorld
             if (readEmoteKeys)
             {
                 int e = InputReader.EmotePressed();
-                if (e >= 0) PlayEmote(Appearance.Emotes[e]);
+                if (e >= 0)
+                {
+                    PlayEmote(Appearance.Emotes[e]);
+                    onLocalEmote?.Invoke(e);
+                }
             }
             Animate(dt);
             UpdateBlink(dt);

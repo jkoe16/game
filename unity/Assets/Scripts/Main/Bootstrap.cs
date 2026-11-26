@@ -93,10 +93,41 @@ namespace PartyWorld
                 session.Begin(startMode);
                 // 시작 메뉴: 주소로 바로 미니게임에 들어온 경우가 아니면 먼저 연다
                 var menu = MainMenu.Create(body, cam);
+                var online = Net.OnlineClient.Create(session, body, ctrl, cam);
                 menu.onPlay = mode =>
                 {
+                    if (online.Busy)
+                    {
+                        online.Leave(); // 혼자 하기로 돌아감 (onEnded 에서 광장을 다시 연다)
+                        if (mode == "") return;
+                    }
                     if (mode != "") session.StartMode(mode);
                     else if (session.mode != null || !(session.map is LobbyPlaza)) session.LoadLobby();
+                };
+                System.Action<System.Action> goOnline = start =>
+                {
+                    online.nickname = menu.Nickname;
+                    online.color = menu.ColorIndex;
+                    online.hat = menu.HatIndex;
+                    if (session.mode != null) session.LoadLobby(); // 혼자 하던 미니게임은 접고
+                    start();
+                };
+                menu.onQuickMatch = () => goOnline(online.QuickMatch);
+                menu.onCreateRoom = () => goOnline(online.CreateRoom);
+                menu.onJoinRoom = code => goOnline(() => online.JoinRoom(code));
+                online.onEnded = reason =>
+                {
+                    session.LoadLobby();
+                    if (reason != "left")
+                    {
+                        menu.Open();
+                        menu.ShowNotice(online.status != "" ? online.status : "온라인 연결이 끝났어요 (" + reason + ")");
+                    }
+                };
+                hud.onExit = () =>
+                {
+                    if (online.Busy) online.Leave();
+                    else session.LoadLobby();
                 };
                 hud.onMenu = menu.Open;
                 if (startMode == "") menu.Open();
